@@ -6,6 +6,19 @@ from os.path import dirname
 DATABASE_FILENAME: str = "vhn-database"
 TOKEN_FILENAME: str = "discord-token.sec"
 
+def load_token():
+    token_file = None
+    token: str = None
+
+    token_file = open(TOKEN_FILENAME, 'r')
+    
+    token = token_file.read()
+    token = token.removesuffix('\n')
+
+    token_file.close()
+    
+    return token
+
 
 def main() -> None:
     server: Server = None
@@ -13,7 +26,7 @@ def main() -> None:
     chdir(f"{dirname(__file__)}/../game-data")
 
     server = Server()
-
+    server.start(load_token())
 
 
 if __name__ == "__main__":
