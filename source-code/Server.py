@@ -37,6 +37,9 @@ GLOBAL_HELP: str = """
     - !clear -------------> delete all messages in terminal
 """
 
+SQUAD_NAMES_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-"
+NICKS_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
 
 class Server:
 
@@ -44,7 +47,14 @@ class Server:
     channels: tuple = None
     bot: discord.Client = None
 
-    def __check_role__(self, member: discord.Member, role_id: int):
+    def __check_name__(self, name: str, alphabet: str) -> bool:
+        for letter in name:
+            if not (letter in alphabet):
+                return False
+        
+        return True
+
+    def __check_role__(self, member: discord.Member, role_id: int) -> bool:
         for role in member.roles:
             if role.id == role_id:
                 return True
@@ -60,12 +70,21 @@ class Server:
         
         elif args[0] == "!clear":
             if self.__check_role__(author, ROLES["Admin"]) is False:
-                await terminal.send(GLOBAL_HELP)
+                await self.__send__("Don't bother yourself :) It's an admin's duty.", terminal, author)
                 return
+
             async for message in terminal.history():
                 await message.delete(delay=5)
-                time.sleep(1)
 
+        elif args[0] == "squad":
+            if len(args) != 2 or (self.__check_name__(args[1], SQUAD_NAMES_ALPHABET) is False):
+                await self.__send__("Incorrect squad name!", terminal, author)
+                return
+            if self.__check_role__(author, ROLES["Squad-Recruit"]) is True or self.__check_role__(author, ROLES["Squad-Master"]) is True or self.__check_role__(author, ROLES["Squad-CoLider"]) is True or self.__check_role__(author, ROLES["Squad-Lider"]) is True:
+                await self.__send__("Your current squad needs you :)", terminal, author)
+                return
+            
+    
     async def __squad__(self, channel: discord.TextChannel, author: discord.Member, args: tuple):
         pass
 
