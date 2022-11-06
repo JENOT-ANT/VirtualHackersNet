@@ -84,6 +84,7 @@ class Server:
                 await self.__send__("Your current squad needs you :)", terminal, author)
                 return
             
+            
     
     async def __squad__(self, channel: discord.TextChannel, author: discord.Member, args: tuple):
         pass
