@@ -16,8 +16,8 @@ def main():
     db["squads"] = {}
     db.close()
 
-    toke_file = open(DC_TOKEN_FILENAME, "w")
-    toke_file.write("Discord API token here!\n")
+    token_file = open(DC_TOKEN_FILENAME, "w")
+    token_file.write("Discord API token here!\n")
     token_file.close()
     
 if __name__ == "__main__":
