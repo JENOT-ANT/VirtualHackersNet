@@ -11,6 +11,7 @@ class VM:
     network: dict = None
     processor: dict = None #{(file, line): cmd}
 
+
     def __init__(self, nick: str, squad: str, ip: str, software: dict, files: dict):
         self.nick = nick
         self.squad = squad

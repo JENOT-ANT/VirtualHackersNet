@@ -12,6 +12,7 @@ class Network:
     by_nick: dict = None
 
     def __load__(self, db_filename: str):
+        
         db = shelve.open(db_filename, "r")
         
         for vm in db["vms"]:
@@ -19,7 +20,7 @@ class Network:
             self.by_ip[vm["ip"]] = self.by_nick[vm["nick"]]
 
         for squad in db["squads"]:
-            pass
+            self.squads[squad["name"]] = Squad(squad["name"], squad["members"])
 
         db.close()
 
