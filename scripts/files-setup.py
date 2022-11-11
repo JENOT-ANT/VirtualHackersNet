@@ -1,7 +1,5 @@
 import shelve
-from os import chdir
-from os import mkdir
-from os import listdir
+from os import chdir, mkdir, listdir
 from os.path import dirname
 
 GAME_DATA_DIR = "game-data"
