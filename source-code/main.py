@@ -25,7 +25,7 @@ def main() -> None:
     
     chdir(f"{dirname(__file__)}/../game-data")
 
-    server = Server()
+    server = Server(DATABASE_FILENAME)
     server.start(load_token())
 
 
