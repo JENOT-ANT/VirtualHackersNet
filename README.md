@@ -1,6 +1,6 @@
 # VirtualHackersNet
 ## Description:
-A text game based on a Discord server, that simulates a virtual network. [You can join here!](https://discord.gg/gHG3gVhn)
+A text game based on a Discord server, that simulates a virtual network. You can join game here -> https://discord.gg/gHG3gVhn!
 
 It's not ready yet :)
 ## Wanna join, contribute?
