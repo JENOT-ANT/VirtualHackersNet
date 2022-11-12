@@ -20,7 +20,7 @@ def main():
     if not (f"{DB_FILENAME}.dat" in listdir()):
         db = shelve.open(DB_FILENAME)
         db["vms"] = []
-        db["squads"] = [{"name": "default", "members": []}]
+        db["squads"] = [{"name": "default", "members": [], "recruting": False}]
         db.close()
     
     if not (DC_TOKEN_FILENAME in listdir()):

@@ -22,7 +22,7 @@ class Network:
             self.by_ip[vm["ip"]] = self.by_nick[vm["nick"]]
 
         for squad in db["squads"]:
-            self.squads[squad["name"]] = Squad(squad["name"], squad["members"])
+            self.squads[squad["name"]] = Squad(squad["name"], squad["members"], squad["recruting"])
 
         db.close()
 
@@ -35,7 +35,7 @@ class Network:
         self.__load__()
 
     def add_squad(self, name: str):
-        self.squads[name] = Squad(name, [])
+        self.squads[name] = Squad(name, [], True)
 
     def save(self):
         db: shelve.Shelf = None

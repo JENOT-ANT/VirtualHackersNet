@@ -1,5 +1,4 @@
 import discord
-import time
 from Network import Network
 
 SERVER_ID: int = 1024343901038985267
@@ -30,14 +29,27 @@ GLOBAL_HELP: str = """
   
   ## Global commands:
     - help ---------------> display this commands' help message
-    - list ---------------> display list of squads
-    - info <squad-name> --> display details about squad
-    - join <squad-name> --> join squad
-    - squad <squad-name> -> create new squad
+    - list ---------------> display a list of squads
+    - info <squad-name> --> display details about the squad
+    - join <squad-name> --> join the squad
+    - squad <squad-name> -> create a new squad
   
   ## Admin commands:
-    - !clear -------------> delete all messages in terminal
-    - !save --------------> save game's data to database
+    - !clear -------------> delete all messages in the terminal
+    - !save --------------> save game's data to a database
+    - !close -------------> stop game's bot
+"""
+
+SQUAD_HELP: str = """
+# Commands:
+
+  ## Member commands:
+    - help --------------------> display this commands' help message
+    - register <nick><passwd> -> create a new VM for yourself
+  ## (Co)Lider commands:
+    - promote <nick> ----------> promote a member by one rank
+    - demote <nick> -----------> demote a member by one rank
+    - farewell <nick> ---------> dismiss a member from the squad
 """
 
 SQUAD_NAMES_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-"
@@ -50,6 +62,15 @@ class Server:
     channels: tuple = None
     bot: discord.Client = None
     guild: discord.Guild = None
+
+
+    def __list__squads__(self) -> str:
+        squad_list: str = f"   squad name    |members|recruitment\n{'=' * 37}\n"
+
+        for squad in self.network.squads.values():
+            squad_list += f"{squad.name:16} | {len(squad.members):2}/12 | {'open' if squad.recruting is True else 'close'}\n"
+
+        return squad_list
 
     async def __create_squad__(self, leader: discord.Member, squad_name: str):
         squad_channel: discord.TextChannel = None
@@ -69,12 +90,14 @@ class Server:
         
         await self.__send__("Now you can create your VM. Use 'register <nick>' cmd.", squad_channel, leader)
 
+
     def __check_name__(self, name: str, alphabet: str) -> bool:
         for letter in name:
             if not (letter in alphabet):
                 return False
         
         return True
+
 
     def __check_role__(self, member: discord.Member, role_id: int) -> bool:
         for role in member.roles:
@@ -83,8 +106,10 @@ class Server:
         
         return False
 
+
     async def __send__(self, content: str, channel: discord.TextChannel, user: discord.Member):
         await channel.send(f"{user.mention}\n```\n{content}\n```")
+
 
     async def __terminal__(self, terminal: discord.TextChannel, author: discord.Member, args: tuple) -> None:
         if args[0] == "help":
@@ -99,6 +124,10 @@ class Server:
                     await message.delete(delay=5)
             if args[0] == "!save":
                 self.network.save()
+                await self.__send__("Database updated.", terminal, author)
+            if args[0] == "!close":
+                await terminal.send("@everyone\n```\nShutting down...\n```")#self.__send__("Shutting down...", terminal, author)
+                await self.bot.close()
 
         elif args[0] == "squad":
 
@@ -114,10 +143,14 @@ class Server:
 
             await self.__create_squad__(author, args[1])
             
-            
+        elif args[0] == "list":
+            await self.__send__(self.__list__squads__(), terminal, author)
     
-    async def __squad__(self, channel: discord.TextChannel, author: discord.Member, args: tuple):
-        pass
+
+    async def __squad__(self, squad_terminal: discord.TextChannel, author: discord.Member, args: tuple):
+        if args[0] == "help":
+            await self.__send__(SQUAD_HELP, squad_terminal, author)
+
 
     def __init__(self, db_filename: str):
         self.network = Network(db_filename)
@@ -127,6 +160,8 @@ class Server:
         async def on_ready() -> None:
             self.guild = self.bot.get_guild(SERVER_ID)
             print(f"-- session by {self.bot.user} in {self.guild.name} --")
+            #await self.__send__("Starting up...", self.guild.get_channel(CHANNELS["terminal"]), self.guild.get_role(ROLES["everyone"]))
+            await self.guild.get_channel(CHANNELS["terminal"]).send("@everyone\n```\nStarting up...\n```")
 
         @self.bot.event
         async def on_message(message: discord.Message) -> None:
@@ -148,7 +183,8 @@ class Server:
             args = message.content.split()
 
             if channel.category_id == CATEGORIS["SQUADS"]:
-                pass
+                print(args)
+                await self.__squad__(channel, author, args)
 
             elif channel.id == CHANNELS["terminal"]:
                 print(args)
