@@ -1,8 +1,10 @@
-# VirtualHackersNet
-## Description:
-A text game based on a Discord server, that simulates a virtual network. You can join game here -> https://discord.gg/gHG3gVhn!
-
-It's not ready yet.
-## Wanna join, contribute?
-**If you want to join game's server or become mod, project developer or maintainer just let me know in discussion tab, so I can add you to the game's *Discord* server.**
+# -VirtualHackersNet-
+## 📜Description:
+  - A **text game** based on a **Discord server**, that simulates a **virtual network**. 
+  - **The final idea behind it is simple: join (or gather) squad, protect your game's virtual machine, hack others, trade and gather virtual currency.**
+  - **You can join game here** -> **https://discord.gg/gHG3gVhn** and become one of the first member of the community!
+    > right now the game is in an early stage of developement and the major part of planned features dosen't work.
+_______________________________________________
+## 🛠 Wanna contribute, maintain game as a mod?
+If you want to become mod, project developer or maintainer just let me know in the `#chat` channel on the Discord server or in `Discussions` tab in this repository.
 
