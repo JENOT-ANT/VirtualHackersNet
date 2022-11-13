@@ -5,7 +5,7 @@ class VM:
     squad: str = None
     ip: str = None
 
-    software: dict = None
+    software: dict = None#{vtp, miner, AI, kernel, vsh}
     files: dict = None
 
     network: dict = None

@@ -53,7 +53,7 @@ SQUAD_HELP: str = """
 """
 
 SQUAD_NAMES_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-"
-NICKS_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+NICKS_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-0134_ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 class Server:
@@ -91,7 +91,10 @@ class Server:
         await self.__send__("Now you can create your VM. Use 'register <nick>' cmd.", squad_channel, leader)
 
 
-    def __check_name__(self, name: str, alphabet: str) -> bool:
+    def __check_name__(self, name: str, alphabet: str, max_lenght: int) -> bool:
+        if len(name) > max_lenght:
+            return False
+
         for letter in name:
             if not (letter in alphabet):
                 return False
@@ -131,7 +134,7 @@ class Server:
 
         elif args[0] == "squad":
 
-            if len(args) != 2 or (self.__check_name__(args[1], SQUAD_NAMES_ALPHABET) is False):
+            if len(args) != 2 or (self.__check_name__(args[1], SQUAD_NAMES_ALPHABET, 14) is False):
                 await self.__send__("Incorrect squad name!", terminal, author)
                 return
             if self.__check_role__(author, ROLES["Squad-Recruit"]) is True or self.__check_role__(author, ROLES["Squad-Master"]) is True or self.__check_role__(author, ROLES["Squad-CoLeader"]) is True or self.__check_role__(author, ROLES["Squad-Leader"]) is True:
@@ -150,6 +153,20 @@ class Server:
     async def __squad__(self, squad_terminal: discord.TextChannel, author: discord.Member, args: tuple):
         if args[0] == "help":
             await self.__send__(SQUAD_HELP, squad_terminal, author)
+        
+        if args[0] == "register":
+        
+            if self.__check_role__(author, ROLES["Hacker"]) is True:
+                await self.__send__("It seems that you already have VM.", squad_terminal, author)
+                return
+            if len(args) != 3:
+                await self.__send__("Incorrect amount of arguments. Take a look at 'help' command.")
+                return
+            if self.__check_name__(args[1], NICKS_ALPHABET, 14) is False:
+                await self.__send__("Incorrect nick!", squad_terminal, author)
+            
+
+
 
 
     def __init__(self, db_filename: str):
