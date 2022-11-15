@@ -8,6 +8,7 @@ CHANNELS: dict = {
     "questions-and-answers": 1025441734508941393,
     "terminal": 1025442786801111091,
     "default": 1025511904803831919,
+    "exchange": 1041788707134521444,
 }
 
 CATEGORIS: dict = {
@@ -54,7 +55,7 @@ SQUAD_HELP: str = """
 
 SQUAD_NAMES_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-"
 NICKS_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-0134_ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
+PASSWDS_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 class Server:
 
@@ -88,8 +89,25 @@ class Server:
         if self.__check_role__(leader, ROLES["Hacker"]) is True:
             return
         
-        await self.__send__("Now you can create your VM. Use 'register <nick>' cmd.", squad_channel, leader)
+        await self.__send__("Now you can create your VM (Virtual Machine). Check 'help' cmd here.", squad_channel, leader)
 
+    async def __join_member__(self, member: discord.Member, squad_name: str):
+        squad_channel: discord.TextChannel = None
+        
+        for channel in self.guild.text_channels:
+            if channel.name == squad_name:
+                squad_channel = channel
+                break
+            
+        await member.add_roles(self.guild.get_role(ROLES["Squad-Recruit"]))
+        await squad_channel.set_permissions(member, read_messages=True, send_messages=True, add_reactions=True)
+        
+        await self.__send__(f"Welcome to {squad_name}!", squad_channel, member)
+
+        if self.__check_role__(member, ROLES["Hacker"]) is True:
+            return
+        
+        await self.__send__("Now you can create your VM (Virtual Machine). Check 'help' cmd here.", squad_channel, member)
 
     def __check_name__(self, name: str, alphabet: str, max_lenght: int) -> bool:
         if len(name) > max_lenght:
@@ -115,6 +133,8 @@ class Server:
 
 
     async def __terminal__(self, terminal: discord.TextChannel, author: discord.Member, args: tuple) -> None:
+        checkpoint: bool = None
+
         if args[0] == "help":
             await self.__send__(GLOBAL_HELP, terminal, author)
         
@@ -129,8 +149,28 @@ class Server:
                 self.network.save()
                 await self.__send__("Database updated.", terminal, author)
             if args[0] == "!close":
-                await terminal.send("@everyone\n```\nShutting down...\n```")#self.__send__("Shutting down...", terminal, author)
+                await terminal.send("@here\n```\nShutting down...\n```")#self.__send__("Shutting down...", terminal, author)
                 await self.bot.close()
+        
+        elif args[0] == "join":
+            if self.__check_role__(author, ROLES["Squad-Recruit"]) is True or self.__check_role__(author, ROLES["Squad-Master"]) is True or self.__check_role__(author, ROLES["Squad-CoLeader"]) is True or self.__check_role__(author, ROLES["Squad-Leader"]) is True:
+                await self.__send__("Your current squad needs you :)", terminal, author)
+                return
+            if len(args) != 2:
+                await self.__send__("Incorrect amount of arguments. Take a look at 'help' command.")
+                return
+
+            checkpoint = False
+            for squad in self.network.squads.values():
+                if squad.name == args[1]:
+                    checkpoint = True
+                    break
+        
+            if checkpoint is False:
+                await self.__send__("Squad not found :(", terminal, author)
+                return
+
+            await self.__join_member__(author, args[1])
 
         elif args[0] == "squad":
 
@@ -160,13 +200,19 @@ class Server:
                 await self.__send__("It seems that you already have VM.", squad_terminal, author)
                 return
             if len(args) != 3:
-                await self.__send__("Incorrect amount of arguments. Take a look at 'help' command.")
+                await self.__send__("Incorrect amount of arguments. Take a look at 'help' command.", squad_terminal, author)
                 return
             if self.__check_name__(args[1], NICKS_ALPHABET, 14) is False:
-                await self.__send__("Incorrect nick!", squad_terminal, author)
+                await self.__send__(f"Incorrect nick!\n- Avielable characters:\n{NICKS_ALPHABET}\n- Max lenght:\n14", squad_terminal, author)
+                return
+            if self.__check_name__(args[2], PASSWDS_ALPHABET, 6) is False:
+                await self.__send__(f"Incorrect password!\n- Avielable characters:\n{PASSWDS_ALPHABET}\n- Max lenght:\n6", squad_terminal, author)
+                return
             
-
-
+            self.network.add_vm(args[1], args[2], squad_terminal.name)
+            await author.edit(nick=args[1])
+            await author.add_roles(self.guild.get_role(ROLES["Hacker"]))
+            await self.__send__("Welcome hacker! Now you can log in and play.", squad_terminal, author)
 
 
     def __init__(self, db_filename: str):
@@ -178,7 +224,7 @@ class Server:
             self.guild = self.bot.get_guild(SERVER_ID)
             print(f"-- session by {self.bot.user} in {self.guild.name} --")
             #await self.__send__("Starting up...", self.guild.get_channel(CHANNELS["terminal"]), self.guild.get_role(ROLES["everyone"]))
-            await self.guild.get_channel(CHANNELS["terminal"]).send("@everyone\n```\nStarting up...\n```")
+            await self.guild.get_channel(CHANNELS["terminal"]).send("@here\n```\nStarting up...\n```")
 
         @self.bot.event
         async def on_message(message: discord.Message) -> None:
@@ -191,7 +237,6 @@ class Server:
             
             if author == self.bot.user:
                 return
-
             
             if channel.category_id == CATEGORIS["GLOBAL"] and channel.id != CHANNELS["terminal"]:
                 return
