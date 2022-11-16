@@ -1,6 +1,10 @@
 import discord
 from Network import Network
+import asyncio
+import threading
+import time
 
+FREQUENCY: int = 0.5
 SERVER_ID: int = 1024343901038985267
 
 CHANNELS: dict = {
@@ -28,10 +32,11 @@ ROLES: dict = {
 GLOBAL_HELP: str = """
 # Commands:
   
+  (N) = not implemented yet
   ## Global commands:
     - help ---------------> display this commands' help message
     - list ---------------> display a list of squads
-    - info <squad-name> --> display details about the squad
+    - (N)info <squad-name> --> display details about the squad
     - join <squad-name> --> join the squad
     - squad <squad-name> -> create a new squad
   
@@ -43,14 +48,16 @@ GLOBAL_HELP: str = """
 
 SQUAD_HELP: str = """
 # Commands:
-
+  
+  (N) = not implemented yet
   ## Member commands:
-    - help --------------------> display this commands' help message
-    - register <nick><passwd> -> create a new VM for yourself
+    - help ---------------------> display this commands' help message
+    - register <nick> <passwd> -> create a new VM for yourself, password should be fake, don't use any real data!
+  
   ## (Co)Lider commands:
-    - promote <nick> ----------> promote a member by one rank
-    - demote <nick> -----------> demote a member by one rank
-    - farewell <nick> ---------> dismiss a member from the squad
+    - (N)promote <nick> --------> promote a member by one rank
+    - (N)demote <nick> ---------> demote a member by one rank
+    - (N)farewell <nick> -------> dismiss a member from the squad
 """
 
 SQUAD_NAMES_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-"
@@ -63,13 +70,22 @@ class Server:
     channels: tuple = None
     bot: discord.Client = None
     guild: discord.Guild = None
-
+    state: bool = None# True - running, False - well...
+    network_thread: threading.Thread = None
 
     def __list__squads__(self) -> str:
-        squad_list: str = f"   squad name    |members|recruitment\n{'=' * 37}\n"
+        squad_list: str = None
+        leader: str = None
+        
+        squad_list = f"   squad name    |members| state | leader\n{'=' * 42}\n"
 
         for squad in self.network.squads.values():
-            squad_list += f"{squad.name:16} | {len(squad.members):2}/12 | {'open' if squad.recruting is True else 'close'}\n"
+            for member in squad.members.keys():
+                if squad.members[member] == "Leader":
+                    leader = member
+                    break
+
+            squad_list += f"{squad.name:16} | {len(squad.members.keys()):2}/12 | {'open' if squad.recruting is True else 'close':5} | {leader}\n"
 
         return squad_list
 
@@ -82,7 +98,7 @@ class Server:
         default_channel = self.guild.get_channel(CHANNELS["default"])
         squad_channel = await default_channel.clone(name=squad_name)
         await leader.add_roles(self.guild.get_role(ROLES["Squad-Leader"]))
-        await squad_channel.set_permissions(leader, read_messages=True, send_messages=True, add_reactions=True, manage_messages=True)
+        await squad_channel.set_permissions(leader, read_messages=True, send_messages=True, add_reactions=True, manage_messages=True, read_message_history=True)
         
         await self.__send__("Your squad servers are ready. Recruitment is open.", squad_channel, leader)
 
@@ -100,7 +116,7 @@ class Server:
                 break
             
         await member.add_roles(self.guild.get_role(ROLES["Squad-Recruit"]))
-        await squad_channel.set_permissions(member, read_messages=True, send_messages=True, add_reactions=True)
+        await squad_channel.set_permissions(member, read_messages=True, send_messages=True, add_reactions=True, read_message_history=True)
         
         await self.__send__(f"Welcome to {squad_name}!", squad_channel, member)
 
@@ -144,13 +160,18 @@ class Server:
                 return
             if args[0] == "!clear":
                 async for message in terminal.history():
-                    await message.delete(delay=5)
+                    await message.delete()
+                    await asyncio.sleep(0.7)
+
             if args[0] == "!save":
                 self.network.save()
                 await self.__send__("Database updated.", terminal, author)
+            
             if args[0] == "!close":
                 await terminal.send("@here\n```\nShutting down...\n```")#self.__send__("Shutting down...", terminal, author)
                 await self.bot.close()
+                self.state = False
+                self.network_thread.join()
         
         elif args[0] == "join":
             if self.__check_role__(author, ROLES["Squad-Recruit"]) is True or self.__check_role__(author, ROLES["Squad-Master"]) is True or self.__check_role__(author, ROLES["Squad-CoLeader"]) is True or self.__check_role__(author, ROLES["Squad-Leader"]) is True:
@@ -208,16 +229,31 @@ class Server:
             if self.__check_name__(args[2], PASSWDS_ALPHABET, 6) is False:
                 await self.__send__(f"Incorrect password!\n- Avielable characters:\n{PASSWDS_ALPHABET}\n- Max lenght:\n6", squad_terminal, author)
                 return
-            
-            self.network.add_vm(args[1], args[2], squad_terminal.name)
+
+            if self.__check_role__(author, ROLES["Squad-Leader"]) is True:
+                self.network.add_vm(args[1], args[2], squad_terminal.name, "Leader")
+            else:
+                self.network.add_vm(args[1], args[2], squad_terminal.name, "Recruit")
+
             await author.edit(nick=args[1])
             await author.add_roles(self.guild.get_role(ROLES["Hacker"]))
             await self.__send__("Welcome hacker! Now you can log in and play.", squad_terminal, author)
+        
+        if args[0][0] == ">":
+            if self.__check_role__(author, ROLES["Hacker"]):
+                pass
 
+    def __network_loop__(self):
+        while self.state is True:
+            self.network.forward()
+            time.sleep(FREQUENCY)
 
     def __init__(self, db_filename: str):
         self.network = Network(db_filename)
         self.bot = discord.Client(intents=discord.Intents.all())
+
+        self.network_thread = threading.Thread(target=self.__network_loop__)
+        self.network_thread.start()
 
         @self.bot.event
         async def on_ready() -> None:
@@ -225,6 +261,7 @@ class Server:
             print(f"-- session by {self.bot.user} in {self.guild.name} --")
             #await self.__send__("Starting up...", self.guild.get_channel(CHANNELS["terminal"]), self.guild.get_role(ROLES["everyone"]))
             await self.guild.get_channel(CHANNELS["terminal"]).send("@here\n```\nStarting up...\n```")
+
 
         @self.bot.event
         async def on_message(message: discord.Message) -> None:
@@ -251,6 +288,7 @@ class Server:
             elif channel.id == CHANNELS["terminal"]:
                 print(args)
                 await self.__terminal__(channel, author, args)
+
     
     def start(self, api_token: str):
         self.bot.run(api_token)

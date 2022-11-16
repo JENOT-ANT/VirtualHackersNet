@@ -4,6 +4,14 @@ from Squad import Squad
 from VM import VM
 
 
+class Address:
+    ip: str = None
+    port: str = None
+
+    def __init__(self, ip: str, port: str) -> None:
+        self.ip = ip
+        self.port = port
+
 class Network:
     '''class for handling virtual network'''
     
@@ -14,6 +22,8 @@ class Network:
 
     __db_filename__: str = None
 
+    def __vsh__(self) -> None:
+        pass
 
     def __generate_ip__(self) -> str:
         ip: str = f"{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}"
@@ -44,17 +54,24 @@ class Network:
         self.by_nick = {}
         self.__load__()
 
-    def add_vm(self, nick: str, password: str, squad: str):
+    def send(self, destination: Address, source: Address, packet: str) -> None:
+        self.by_ip[destination.ip].network[destination.port] = ((source.ip, source.port), packet)
+
+    def forward(self):
+        for vm in self.by_nick.values():
+            pass
+
+    def add_vm(self, nick: str, password: str, squad: str, role: str):
         ip: str = self.__generate_ip__()
         self.by_nick[nick] = VM(nick, squad, ip, {}, {})
         self.by_ip[ip] = self.by_nick[nick]
 
         self.by_nick[nick].files["shadow.sys"] = str(hash(password))
         
-        self.squads[squad].members.append(nick)
+        self.squads[squad].members[nick] = role
 
     def add_squad(self, name: str):
-        self.squads[name] = Squad(name, [], True)
+        self.squads[name] = Squad(name, {}, True)
 
     def save(self):
         db: shelve.Shelf = None

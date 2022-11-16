@@ -2,10 +2,10 @@ from VM import VM
 
 class Squad:
     name: str = None
-    members: list = None
+    members: dict = None
     recruting: bool = None
 
-    def __init__(self, name: str, members: list, recruting: bool):
+    def __init__(self, name: str, members: dict, recruting: bool):
         self.name = name
         self.members = members
         self.recruting = recruting
