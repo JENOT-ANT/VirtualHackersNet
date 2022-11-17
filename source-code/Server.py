@@ -1,7 +1,10 @@
+# Dev-notes:
+# Create change_passwd method in VM instead editing the "shadow.sys" in Network.add_vm method
+# Move chracter limits in creating password and nick, to some constants
 import discord
 from Network import Network
 import asyncio
-import threading
+#import threading
 import time
 
 FREQUENCY: int = 0.5
@@ -64,6 +67,7 @@ SQUAD_NAMES_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-"
 NICKS_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-0134_ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 PASSWDS_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
+
 class Server:
 
     network: Network = None
@@ -71,7 +75,7 @@ class Server:
     bot: discord.Client = None
     guild: discord.Guild = None
     state: bool = None# True - running, False - well...
-    network_thread: threading.Thread = None
+    #network_thread: threading.Thread = None
 
     def __list__squads__(self) -> str:
         squad_list: str = None
@@ -80,6 +84,7 @@ class Server:
         squad_list = f"   squad name    |members| state | leader\n{'=' * 42}\n"
 
         for squad in self.network.squads.values():
+            leader = None
             for member in squad.members.keys():
                 if squad.members[member] == "Leader":
                     leader = member
@@ -243,17 +248,13 @@ class Server:
             if self.__check_role__(author, ROLES["Hacker"]):
                 pass
 
-    def __network_loop__(self):
-        while self.state is True:
-            self.network.forward()
-            time.sleep(FREQUENCY)
 
     def __init__(self, db_filename: str):
         self.network = Network(db_filename)
         self.bot = discord.Client(intents=discord.Intents.all())
-
-        self.network_thread = threading.Thread(target=self.__network_loop__)
-        self.network_thread.start()
+        
+        #self.network_thread = threading.Thread(target=self.__network_loop__)
+        #self.network_thread.start()
 
         @self.bot.event
         async def on_ready() -> None:

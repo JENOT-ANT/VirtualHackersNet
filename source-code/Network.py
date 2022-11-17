@@ -1,16 +1,8 @@
 import shelve
 import random
 from Squad import Squad
-from VM import VM
+from VM import VM, Packet, Process
 
-
-class Address:
-    ip: str = None
-    port: str = None
-
-    def __init__(self, ip: str, port: str) -> None:
-        self.ip = ip
-        self.port = port
 
 class Network:
     '''class for handling virtual network'''
@@ -34,11 +26,16 @@ class Network:
         return ip
 
     def __load__(self):
-        
+        port_config: dict = None
         db: shelve.Shelf = shelve.open(self.__db_filename__, "r")
         
         for vm in db["vms"]:
-            self.by_nick[vm["nick"]] = VM(vm["nick"], vm["squad"], vm["ip"], vm["software"], vm["files"])
+            if "port_config" in vm.keys():
+                port_config = vm["port_config"]
+            else:
+                port_config = {}
+            
+            self.by_nick[vm["nick"]] = VM(vm["nick"], vm["squad"], vm["ip"], vm["software"], vm["files"], port_config)
             self.by_ip[vm["ip"]] = self.by_nick[vm["nick"]]
 
         for squad in db["squads"]:
@@ -54,16 +51,29 @@ class Network:
         self.by_nick = {}
         self.__load__()
 
-    def send(self, destination: Address, source: Address, packet: str) -> None:
-        self.by_ip[destination.ip].network[destination.port] = ((source.ip, source.port), packet)
+    def send(self, destination: tuple, source: tuple, content: str) -> None:
+        self.by_ip[destination[0]].network[destination[1]] = Packet(source, content)
 
-    def forward(self):
-        for vm in self.by_nick.values():
-            pass
+    def recv(self, address: tuple) -> Packet:
+        return self.by_ip[address[0]].network.pop(address[1])
+
+    def forward(self, ip: str) -> str:
+        vm: VM = None
+        iosout: str = None
+
+
+        vm = self.by_ip[ip]
+
+        for process in vm.processor:
+            if process.cmd == "vsh-server":
+                #if self.by_ip[ip]
+                pass
+
+        return iosout
 
     def add_vm(self, nick: str, password: str, squad: str, role: str):
         ip: str = self.__generate_ip__()
-        self.by_nick[nick] = VM(nick, squad, ip, {}, {})
+        self.by_nick[nick] = VM(nick, squad, ip, {}, {}, {})
         self.by_ip[ip] = self.by_nick[nick]
 
         self.by_nick[nick].files["shadow.sys"] = str(hash(password))
