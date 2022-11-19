@@ -1,5 +1,13 @@
 # -VirtualHackersNet-
-## 📜Description:
+
+## 🔢 Community counter:
+| Members\* | Squads\*\* |
+| :-------: | :--------: |
+| 8         | 2          |
+
+\*Discord server members | \*\*In-game teams
+
+## 📜 Description:
   - A **text game** based on a **Discord server**, that simulates a **virtual network**. 
   - **The final idea behind it is simple: join (or gather) squad, protect your game's virtual machine, hack others, trade and gather virtual currency.**
   - **You can join game here** -> **https://discord.gg/gHG3gVhn** and become one of the first member of the community!
