@@ -39,7 +39,7 @@ GLOBAL_HELP: str = """
   ## Global commands:
     - help ---------------> display this commands' help message
     - list ---------------> display a list of squads
-    - (N)info <squad-name> --> display details about the squad
+    - info <squad-name> --> (N)display details about the squad
     - join <squad-name> --> join the squad
     - squad <squad-name> -> create a new squad
   
@@ -54,13 +54,13 @@ SQUAD_HELP: str = """
   
   (N) = not implemented yet
   ## Member commands:
-    - help ---------------------> display this commands' help message
-    - register <nick> <passwd> -> create a new VM for yourself, password should be fake, don't use any real data!
+    - help --------------------> display this commands' help message
+    - register <nick><passwd> -> create a new VM for yourself, password should be fake, don't use any real data!
   
   ## (Co)Lider commands:
-    - (N)promote <nick> --------> promote a member by one rank
-    - (N)demote <nick> ---------> demote a member by one rank
-    - (N)farewell <nick> -------> dismiss a member from the squad
+    - promote <nick> ----------> (N)promote a member by one rank
+    - demote <nick> -----------> (N)demote a member by one rank
+    - farewell <nick> ---------> (N)dismiss a member from the squad
 """
 
 SQUAD_NAMES_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-"
@@ -148,6 +148,21 @@ class Server:
         
         return False
 
+
+    async def __vsh__(self, args: list, squad_terminal: discord.TextChannel, author: discord.Member):
+        ip: str = None
+        port: int = None
+        message: str = ""
+        nick: str = author.display_name
+
+        for arg in args:
+            message += arg + ' '
+
+        ip = self.network.by_nick[nick].ip
+        port = self.network.by_nick[nick].port_config["vsh"]
+        self.network.send((ip, port), (nick, None), message)
+        message = self.network.vsh(self.network.by_nick[nick])
+        await self.__send__(message, squad_terminal, author)
 
     async def __send__(self, content: str, channel: discord.TextChannel, user: discord.Member):
         await channel.send(f"{user.mention}\n```\n{content}\n```")
@@ -245,8 +260,11 @@ class Server:
             await self.__send__("Welcome hacker! Now you can log in and play.", squad_terminal, author)
         
         if args[0][0] == ">":
-            if self.__check_role__(author, ROLES["Hacker"]):
-                pass
+            if self.__check_role__(author, ROLES["Hacker"]) is False:
+                await self.__send__("You are not regstered yet... See `help` cmd here.", squad_terminal, author)
+                return
+            
+            await self.__vsh__(args, squad_terminal, author)
 
 
     def __init__(self, db_filename: str):

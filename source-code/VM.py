@@ -1,3 +1,4 @@
+from hashlib import md5
 
 DEFAULT_SOFTWARE: dict = {
     "vtp": 1,
@@ -8,6 +9,7 @@ DEFAULT_SOFTWARE: dict = {
     "dns": 0,
 }
 
+# ports > 1000 are not allowed, they are for responding connections, np. respond from vsh: 2222, from vtp: 8080, etc.
 DEFAULT_PORT_CONFIG: dict = {
     "vtp": 80,
     "vsh": 22,
@@ -15,8 +17,20 @@ DEFAULT_PORT_CONFIG: dict = {
 
 DEFAULT_FILES: dict = {
     "log.sys": "o [----------] -> VM Created, Welcome!\n",
-    "shadow.sys": str(hash("admin")),
+    "shadow.sys": md5("admin".encode('ascii')).hexdigest(),
 }
+
+VM_HELP: str = """
+# Commands:
+
+  - >help -------------------> display this commands' help message
+  - >ls ---------------------> list files of currently logged user
+  - >cat <filename> ---------> display content of the file
+  - >whoami -----------------> display currently-logged user's nick and IP
+  - >whois <IP> -------------> display squad and nick of player with that IP
+  - >exit -------------------> close vsh connection
+  - >vsh <IP><port><passwd> -> connect to IP's VM (Virtual Machine)
+"""
 
 
 class Packet:
@@ -52,6 +66,20 @@ class VM:
     processor: list = None
 
     port_config: dict = None#{software: port}
+    logged_in: list = None
+    forward_to: dict = None#{user-form-logged_in: target-address}
+
+    def help(self) -> str:
+        return VM_HELP
+    
+    def ls(self) -> str:
+        return f"Files at {self.nick}({self.ip}):\n{tuple(self.files.keys())}"
+
+    def cat(self, filename: str) -> str:
+        return f"'{filename}' at {self.nick}({self.ip}):\n{self.files[filename]}"
+
+    def whoami(self) -> str:
+        return f"{self.nick} {self.ip}"
 
     def start(self, cmd: str, file: str=None, line: int=None):
         self.processor.append(Process(cmd, file, line))
@@ -66,6 +94,8 @@ class VM:
         self.port_config = port_config
         self.processor = []
         self.network = {}
+        self.logged_in = [nick, ]
+        self.forward_to = {}
 
         self.start("vsh-server")
 

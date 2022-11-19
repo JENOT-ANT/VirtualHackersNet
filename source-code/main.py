@@ -6,6 +6,7 @@ from os.path import dirname
 DATABASE_FILENAME: str = "vhn-database"
 TOKEN_FILENAME: str = "discord-token.sec"
 
+
 def load_token():
     token_file = None
     token: str = None
