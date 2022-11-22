@@ -1,4 +1,5 @@
 from hashlib import md5
+from time import gmtime
 
 DEFAULT_SOFTWARE: dict = {
     "vtp": 1,
@@ -16,7 +17,7 @@ DEFAULT_PORT_CONFIG: dict = {
 }
 
 DEFAULT_FILES: dict = {
-    "log.sys": "o [----------] -> VM Created, Welcome!\n",
+    "log.sys": "o [--------------] -> VM Created, Welcome!\n",
     "shadow.sys": md5("admin".encode('ascii')).hexdigest(),
 }
 
@@ -27,9 +28,9 @@ VM_HELP: str = """
   - >ls ---------------------> list files of currently logged user
   - >cat <filename> ---------> display content of the file
   - >whoami -----------------> display currently-logged user's nick and IP
-  - >whois <IP> -------------> display squad and nick of player with that IP
-  - >exit -------------------> close vsh connection
+  - >exit -------------------> close last vsh connection
   - >vsh <IP><port><passwd> -> connect to IP's VM (Virtual Machine)
+  - >proxy ------------------> display your vsh connection path
 """
 
 
@@ -58,6 +59,8 @@ class VM:
     nick: str = None
     squad: str = None
     ip: str = None
+    wallet: int = None
+    #t_zone: int = None
 
     software: dict = None#{vtp, miner, AI, kernel, vsh, dns}
     files: dict = None
@@ -68,6 +71,9 @@ class VM:
     port_config: dict = None#{software: port}
     logged_in: list = None
     forward_to: dict = None#{user-form-logged_in: target-address}
+
+    def add_to_log(self, content: str):
+        self.files["log.sys"] += f"\no [{gmtime().tm_mon:0>2}/{gmtime().tm_mday:0>2}; {gmtime().tm_hour:0>2}:{gmtime().tm_min:0>2}] -> {content}"
 
     def help(self) -> str:
         return VM_HELP
@@ -80,18 +86,24 @@ class VM:
 
     def whoami(self) -> str:
         return f"{self.nick} {self.ip}"
+    
+    def exit(self, client_ip: str):
+        self.logged_in.remove(client_ip)
 
     def start(self, cmd: str, file: str=None, line: int=None):
         self.processor.append(Process(cmd, file, line))
 
 
-    def __init__(self, nick: str, squad: str, ip: str, software: dict, files: dict, port_config: dict):
+    def __init__(self, nick: str, squad: str, ip: str, wallet: int, software: dict, files: dict, port_config: dict):
         self.nick = nick
         self.squad = squad
         self.ip = ip
+        self.wallet = wallet
         self.software = software
         self.files = files
         self.port_config = port_config
+        #self.t_zone = t_zone
+
         self.processor = []
         self.network = {}
         self.logged_in = [nick, ]
@@ -116,7 +128,9 @@ class VM:
             "nick": self.nick,
             "squad": self.squad,
             "ip": self.ip,
+            "wallet": self.wallet,
             "software": self.software,
             "files": self.files,
             "port_config": self.port_config,
+            #"time_zone": self.t_zone,
         }

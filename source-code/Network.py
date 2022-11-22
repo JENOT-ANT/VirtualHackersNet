@@ -4,10 +4,13 @@ from Squad import Squad
 from VM import VM, Packet, Process
 from hashlib import md5
 
+MAX_CV: int = int(1e9)
+
 
 class Network:
     '''class for handling virtual network'''
     
+    bank: int = None
     squads: dict = None
 
     by_ip: dict = None
@@ -28,6 +31,9 @@ class Network:
     #     self.send(address, source, f"connect {source[0]} {source[1]} {passwd}")
     #     return self.vsh(target)
 
+    def transfer(self, amount: int, destination: str, source: str=None):
+        pass
+
     def vsh(self, vm: VM) -> str:
         packet: Packet = None
         answer: Packet = None
@@ -47,6 +53,12 @@ class Network:
                 self.vsh(target)
                 answer = self.recv(vm, 2222)
                 
+                if answer.content == "disconnect":
+                    vm.forward_to.pop(packet.source[0])
+                    iosout = f"Connection to {target.nick}({target.ip}) has been closed."
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+
                 iosout = answer.content
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
@@ -81,6 +93,13 @@ class Network:
 
             elif args[0] == ">whoami":
                 iosout = vm.whoami()
+                self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return iosout
+
+            elif args[0] == ">exit":
+                vm.exit(packet.source[0])
+                
+                iosout = "disconnect"
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
 
@@ -137,10 +156,14 @@ class Network:
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                     return iosout
                 if md5(args[1].encode('ascii')).hexdigest() != vm.files["shadow.sys"]:
+                    vm.add_to_log(f"Connection failed from {packet.source[0]}")
+                    
                     iosout = "credentials"
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                     return iosout
 
+                vm.add_to_log(f"{packet.source[0]} has just connected.")
+                
                 iosout = "accept"
                 vm.logged_in.append(packet.source[0])
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
@@ -162,6 +185,8 @@ class Network:
 
     def __load__(self):
         port_config: dict = None
+        wallet: int = None
+
         db: shelve.Shelf = shelve.open(self.__db_filename__, "r")
         
         for vm in db["vms"]:
@@ -170,11 +195,20 @@ class Network:
             else:
                 port_config = {}
             
-            self.by_nick[vm["nick"]] = VM(vm["nick"], vm["squad"], vm["ip"], vm["software"], vm["files"], port_config)
+            if "wallet" in vm.keys():
+                wallet = vm["wallet"]
+            else:
+                wallet = 0
+
+            
+            self.by_nick[vm["nick"]] = VM(vm["nick"], vm["squad"], vm["ip"], wallet, vm["software"], vm["files"], port_config)
             self.by_ip[vm["ip"]] = self.by_nick[vm["nick"]]
 
         for squad in db["squads"]:
             self.squads[squad["name"]] = Squad(squad["name"], squad["members"], squad["recruting"])
+
+        if "bank" in db.keys():
+            self.bank = db["bank"]
 
         db.close()
 
@@ -184,6 +218,7 @@ class Network:
         self.squads = {}
         self.by_ip = {}
         self.by_nick = {}
+        self.bank = MAX_CV
         self.__load__()
 
     def send(self, destination: tuple, source: tuple, content: str) -> None:
@@ -207,7 +242,7 @@ class Network:
 
     def add_vm(self, nick: str, password: str, squad: str, role: str):
         ip: str = self.__generate_ip__()
-        self.by_nick[nick] = VM(nick, squad, ip, {}, {}, {})
+        self.by_nick[nick] = VM(nick, squad, ip, 0, {}, {}, {})
         self.by_ip[ip] = self.by_nick[nick]
 
         self.by_nick[nick].files["shadow.sys"] = md5(password.encode('ascii')).hexdigest()
@@ -230,4 +265,5 @@ class Network:
         db = shelve.open(self.__db_filename__, "w")
         db["vms"] = vms
         db["squads"] = squads
+        db["bank"] = self.bank
         db.close()

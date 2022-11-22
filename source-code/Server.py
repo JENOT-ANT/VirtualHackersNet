@@ -5,7 +5,7 @@ import discord
 from Network import Network
 import asyncio
 #import threading
-import time
+from time import asctime, gmtime
 
 FREQUENCY: int = 0.5
 SERVER_ID: int = 1024343901038985267
@@ -56,6 +56,9 @@ SQUAD_HELP: str = """
   ## Member commands:
     - help --------------------> display this commands' help message
     - register <nick><passwd> -> create a new VM for yourself, password should be fake, don't use any real data!
+    - panel -------------------> (N)display basic info about squad
+    - time --------------------> display server time
+    - whois <IP> --------------> display squad and nick of the player with that IP
   
   ## (Co)Lider commands:
     - promote <nick> ----------> (N)promote a member by one rank
@@ -235,7 +238,7 @@ class Server:
         if args[0] == "help":
             await self.__send__(SQUAD_HELP, squad_terminal, author)
         
-        if args[0] == "register":
+        elif args[0] == "register":
         
             if self.__check_role__(author, ROLES["Hacker"]) is True:
                 await self.__send__("It seems that you already have VM.", squad_terminal, author)
@@ -259,7 +262,21 @@ class Server:
             await author.add_roles(self.guild.get_role(ROLES["Hacker"]))
             await self.__send__("Welcome hacker! Now you can log in and play.", squad_terminal, author)
         
-        if args[0][0] == ">":
+        elif args[0] == "time":
+            await self.__send__(f"It's <{asctime(gmtime())}> in the game.", squad_terminal, author)
+
+        elif args[0] == "whois":
+            if len(args) != 2:
+                await self.__send__("Incorrect amount of arguments. Take a look at 'help' command.", squad_terminal, author)
+                return
+
+            if not args[1] in self.network.by_ip.keys():
+                await self.__send__("IP address not found.", squad_terminal, author)
+                return
+            
+            await self.__send__(f"{args[1]}:\n\tnick: {self.network.by_ip[args[1]].nick}\n\tsquad: {self.network.by_ip[args[1]].squad}", squad_terminal, author)
+
+        elif args[0][0] == ">":
             if self.__check_role__(author, ROLES["Hacker"]) is False:
                 await self.__send__("You are not regstered yet... See `help` cmd here.", squad_terminal, author)
                 return
@@ -279,7 +296,7 @@ class Server:
             self.guild = self.bot.get_guild(SERVER_ID)
             print(f"-- session by {self.bot.user} in {self.guild.name} --")
             #await self.__send__("Starting up...", self.guild.get_channel(CHANNELS["terminal"]), self.guild.get_role(ROLES["everyone"]))
-            await self.guild.get_channel(CHANNELS["terminal"]).send("@here\n```\nStarting up...\n```")
+            await self.guild.get_channel(CHANNELS["terminal"]).send("```\nStarting up...\n```")
 
 
         @self.bot.event

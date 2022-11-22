@@ -11,7 +11,7 @@ def main():
     chdir(f"{dirname(__file__)}/../{GAME_DATA_DIR}")
     
     db = shelve.open(DB_FILENAME, "r")
-    print(f"{tuple(db.keys())[0]}: {tuple(db.values())[0]}\n{tuple(db.keys())[1]}: {tuple(db.values())[1]}")
+    print(f"{tuple(db.keys())[0]}: {tuple(db.values())[0]}\n\n\n{tuple(db.keys())[1]}: {tuple(db.values())[1]}\n\n\n{tuple(db.keys())[2]}: {tuple(db.values())[2]}")
     db.close()
 
     
