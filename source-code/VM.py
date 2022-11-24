@@ -1,5 +1,5 @@
 from hashlib import md5
-from time import gmtime
+from time import gmtime, asctime
 
 DEFAULT_SOFTWARE: dict = {
     "vtp": 1,
@@ -87,6 +87,22 @@ class VM:
     def whoami(self) -> str:
         return f"{self.nick} {self.ip}"
     
+    def dashboard(self) -> str:
+        return f"""
+________________________________________
+|>{                 self.whoami():^36}<|
+|--------------------------------------|
+|{f'{self.wallet} [CV]':<13} {asctime(gmtime()):>24}|
+|                                      |
+|                                      |
+|                                      |
+|                                      |
+|                                      |
+|                                      |
+|                                      |
+|______________________________________|
+        """
+
     def exit(self, client_ip: str):
         self.logged_in.remove(client_ip)
 
@@ -118,7 +134,10 @@ class VM:
         for file_name in DEFAULT_FILES.keys():
             if not file_name in self.files.keys():
                 self.files[file_name] = DEFAULT_FILES[file_name]
-        
+
+        if not "miner.config" in self.files.keys():
+            self.files["miner.config"] = self.nick
+
         for program in DEFAULT_PORT_CONFIG.keys():
             if not program in self.port_config.keys():
                 self.port_config[program] = DEFAULT_PORT_CONFIG[program]

@@ -3,36 +3,74 @@ import random
 from Squad import Squad
 from VM import VM, Packet, Process
 from hashlib import md5
+from random import randint
+from time import sleep
 
+
+FREQUENCY: int = 0.5
 MAX_CV: int = int(1e9)
+MAX_CV_HASH: int = 10000
+FOUND_CV_AMOUNT: int = 10
+
+SYSTEM_IP: str = "0.0.0.0"
+
+SYSTEM_PORTS: dict = {
+    "mine": 76,
+}
 
 
 class Network:
     '''class for handling virtual network'''
-    
+    running: bool = False
+
     bank: int = None
     squads: dict = None
 
     by_ip: dict = None
     by_nick: dict = None
 
+    system: dict = None
+
+    __cv_hash__: str = None
     __db_filename__: str = None
 
-    # def __connect__(self, address: tuple, passwd: str, source: tuple) -> str:
-    #     target: VM = None
 
-    #     target = self.by_ip[address[0]]
-        
-    #     if target.port_config["vsh"] != address[1]:
-    #         if address[1] in target.port_config.values():
-    #             return "Error! Address responded with different protocol."
-    #         return "Error! Connection refused."
-        
-    #     self.send(address, source, f"connect {source[0]} {source[1]} {passwd}")
-    #     return self.vsh(target)
+    def transfer(self, amount: int, destination: str=None, source: str=None) -> bool:
+        if source == None:
+            if amount > self.bank:
+                return False
 
-    def transfer(self, amount: int, destination: str, source: str=None):
-        pass
+            self.by_nick[destination].wallet += amount
+            self.bank -= amount
+            
+        else:
+            if amount > self.by_nick[source].wallet:
+                return False
+
+            if destination == None:
+                self.bank += amount
+                self.by_nick[source].wallet -= amount
+            else:
+                self.by_nick[destination].wallet += amount
+                self.by_nick[source].wallet -= amount
+        
+        return True
+
+    def sys_mine(self):
+        packet: Packet = None
+        args: list = None
+
+        packet = self.recv(SYSTEM_PORTS["mine"])
+        args = packet.content.split()
+        
+        #print(args)
+
+        if len(args) == 2 and args[1] in self.by_nick.keys() and args[0] == self.__cv_hash__:
+            print(f"Found by {args[1]}")
+            if self.transfer(FOUND_CV_AMOUNT, args[1]) is True:
+                self.send((self.by_nick[args[1]].ip, 7676), (SYSTEM_IP, SYSTEM_PORTS["mine"]), "found")
+            
+            self.__cv_hash__ = str(randint(0, MAX_CV_HASH))
 
     def vsh(self, vm: VM) -> str:
         packet: Packet = None
@@ -41,7 +79,7 @@ class Network:
         args: list = None
         iosout: str = None
 
-        packet = self.recv(vm, vm.port_config["vsh"])
+        packet = self.recv(vm.port_config["vsh"], vm)
         
         args = packet.content.split()
 
@@ -51,7 +89,7 @@ class Network:
                 self.send((target.ip, vm.forward_to[packet.source[0]][1]), (vm.ip, 2222), packet.content)
                 
                 self.vsh(target)
-                answer = self.recv(vm, 2222)
+                answer = self.recv(2222, vm)
                 
                 if answer.content == "disconnect":
                     vm.forward_to.pop(packet.source[0])
@@ -96,6 +134,11 @@ class Network:
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
 
+            elif args[0] == ">panel":
+                iosout = vm.dashboard()
+                self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return iosout
+
             elif args[0] == ">exit":
                 vm.exit(packet.source[0])
                 
@@ -109,6 +152,16 @@ class Network:
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                     return iosout
                 
+                if args[1] == SYSTEM_IP:
+                    if args[2] in SYSTEM_PORTS:
+                        iosout = "Error! Address responded with different protocol."
+                        self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                        return iosout
+
+                    iosout = "Error! Connection refused."
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+
                 if not args[1] in self.by_ip.keys():
                     iosout = "Error! IP address not found or not responding!"
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
@@ -129,7 +182,7 @@ class Network:
                 self.send((target.ip, target.port_config["vsh"]), (vm.ip, 2222), f"connect {args[3]}")
                 self.vsh(target)
                 
-                answer = self.recv(vm, 2222)
+                answer = self.recv(2222, vm)
                 print(answer.content)
 
                 if answer.content != "accept":
@@ -173,12 +226,21 @@ class Network:
                 iosout = "Access denied! Not authenticated."
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
+    
+    def miner(self, vm: VM):
+        answer: Packet = None
+        self.send((SYSTEM_IP, SYSTEM_PORTS["mine"]), (vm.ip, 7676), f"{random.randint(0, MAX_CV_HASH)} {vm.files['miner.config']}")
 
+        if 7676 in vm.network.keys():
+            answer = self.recv(7676, vm)
+            
+            if answer.source[0] == SYSTEM_IP and answer.content == "found":
+                vm.add_to_log(f"Found {FOUND_CV_AMOUNT} [CV] by miner.")
 
     def __generate_ip__(self) -> str:
         ip: str = f"{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}"
         
-        while ip in self.by_ip.keys():
+        while ip in self.by_ip.keys() or ip == SYSTEM_IP:
             ip = f"{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}"
 
         return ip
@@ -214,31 +276,37 @@ class Network:
 
 
     def __init__(self, db_filename: str):
+        self.running = True
         self.__db_filename__ = db_filename
+        self.__cv_hash__ = str(randint(0, MAX_CV_HASH))
         self.squads = {}
         self.by_ip = {}
         self.by_nick = {}
+        self.system = {}
         self.bank = MAX_CV
         self.__load__()
 
     def send(self, destination: tuple, source: tuple, content: str) -> None:
         if destination[0] in self.by_ip.keys():
             self.by_ip[destination[0]].network[destination[1]] = Packet(source, content)
+        
+        elif destination[0] == SYSTEM_IP:
+            self.system[destination[1]] = Packet(source, content)
 
-    def recv(self, vm: VM, port: int) -> Packet:
-        return vm.network.pop(port)
+    def recv(self, port: int, vm: VM=None) -> Packet:
+        if vm != None:
+            return vm.network.pop(port)
+        else:
+            return self.system.pop(port)
 
-    def forward(self, ip: str) -> str:
-        vm: VM = None
-        iosout: str = None
+    def cpu_loop(self):
 
-
-        vm = self.by_ip[ip]
-
-        for process in vm.processor:
-            pass
-
-        return iosout
+        while self.running is True:
+            for vm in self.by_nick.values():
+                self.miner(vm)
+                self.sys_mine()
+            
+            sleep(FREQUENCY)
 
     def add_vm(self, nick: str, password: str, squad: str, role: str):
         ip: str = self.__generate_ip__()

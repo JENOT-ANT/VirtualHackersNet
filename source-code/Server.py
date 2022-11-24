@@ -4,10 +4,9 @@
 import discord
 from Network import Network
 import asyncio
-#import threading
+import threading
 from time import asctime, gmtime
 
-FREQUENCY: int = 0.5
 SERVER_ID: int = 1024343901038985267
 
 CHANNELS: dict = {
@@ -77,8 +76,8 @@ class Server:
     channels: tuple = None
     bot: discord.Client = None
     guild: discord.Guild = None
-    state: bool = None# True - running, False - well...
-    #network_thread: threading.Thread = None
+    #state: bool = None# True - running, False - well...
+    network_thread: threading.Thread = None
 
     def __list__squads__(self) -> str:
         squad_list: str = None
@@ -192,9 +191,10 @@ class Server:
             
             if args[0] == "!close":
                 await terminal.send("@here\n```\nShutting down...\n```")#self.__send__("Shutting down...", terminal, author)
-                await self.bot.close()
-                self.state = False
+                #self.state = False
+                self.network.running = False
                 self.network_thread.join()
+                await self.bot.close()
         
         elif args[0] == "join":
             if self.__check_role__(author, ROLES["Squad-Recruit"]) is True or self.__check_role__(author, ROLES["Squad-Master"]) is True or self.__check_role__(author, ROLES["Squad-CoLeader"]) is True or self.__check_role__(author, ROLES["Squad-Leader"]) is True:
@@ -288,8 +288,8 @@ class Server:
         self.network = Network(db_filename)
         self.bot = discord.Client(intents=discord.Intents.all())
         
-        #self.network_thread = threading.Thread(target=self.__network_loop__)
-        #self.network_thread.start()
+        self.network_thread = threading.Thread(target=self.network.cpu_loop)
+        self.network_thread.start()
 
         @self.bot.event
         async def on_ready() -> None:
