@@ -3,7 +3,7 @@
 ## 🔢 Community counter:
 | Members\* | Squads\*\* |
 | :-------: | :--------: |
-| 9         | 2          |
+| 10        | 2          |
 
 \*Discord server members | \*\*In-game teams
 
