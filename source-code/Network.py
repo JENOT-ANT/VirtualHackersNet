@@ -3,7 +3,7 @@ import random
 from Squad import Squad
 from VM import VM, Packet, Process
 from hashlib import md5
-from random import randint
+from random import randint, choices
 from time import sleep
 
 
@@ -12,12 +12,16 @@ MAX_CV: int = int(1e9)
 MAX_CV_HASH: int = 10000
 FOUND_CV_AMOUNT: int = 10
 
+PASSWD_LENGHT: int = 4
+PASSWDS_ALPHABET: str = "02458AMPQYZ"
+
 SYSTEM_IP: str = "0.0.0.0"
 
 SYSTEM_PORTS: dict = {
     "mine": 76,
 }
 
+DEFAULT_OS: str = "Debian"
 
 class Network:
     '''class for handling virtual network'''
@@ -245,9 +249,13 @@ class Network:
 
         return ip
 
+    def __generate_password__(self) -> str:
+        return "".join(choices(PASSWDS_ALPHABET, k=PASSWD_LENGHT))
+
     def __load__(self):
         port_config: dict = None
         wallet: int = None
+        os: str = None
 
         db: shelve.Shelf = shelve.open(self.__db_filename__, "r")
         
@@ -262,8 +270,12 @@ class Network:
             else:
                 wallet = 0
 
+            if "os" in vm.keys():
+                os = vm["os"]
+            else:
+                os = DEFAULT_OS
             
-            self.by_nick[vm["nick"]] = VM(vm["nick"], vm["squad"], vm["ip"], wallet, vm["software"], vm["files"], port_config)
+            self.by_nick[vm["nick"]] = VM(vm["nick"], vm["squad"], vm["ip"], os, wallet, vm["software"], vm["files"], port_config)
             self.by_ip[vm["ip"]] = self.by_nick[vm["nick"]]
 
         for squad in db["squads"]:
@@ -308,17 +320,20 @@ class Network:
             
             sleep(FREQUENCY)
 
-    def add_vm(self, nick: str, password: str, squad: str, role: str):
+    def add_vm(self, old_name: str, nick: str, os: str, squad: str):
         ip: str = self.__generate_ip__()
-        self.by_nick[nick] = VM(nick, squad, ip, 0, {}, {}, {})
+        password: str = self.__generate_password__()
+        
+        self.by_nick[nick] = VM(nick, squad, ip, os, 0, {}, {}, {})
         self.by_ip[ip] = self.by_nick[nick]
 
         self.by_nick[nick].files["shadow.sys"] = md5(password.encode('ascii')).hexdigest()
         
-        self.squads[squad].members[nick] = role
+        self.squads[squad].members[nick] = self.squads[squad].members.pop(old_name)
 
-    def add_squad(self, name: str):
+    def add_squad(self, name: str, leader: str):
         self.squads[name] = Squad(name, {}, True)
+        self.squads[name].members[leader] = "Squad-Leader"
 
     def save(self):
         db: shelve.Shelf = None

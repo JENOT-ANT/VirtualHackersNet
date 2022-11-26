@@ -2,6 +2,7 @@
 # Create change_passwd method in VM instead editing the "shadow.sys" in Network.add_vm method
 # Move chracter limits in creating password and nick, to some constants
 import discord
+#from discord.ext import commands
 from Network import Network
 import asyncio
 import threading
@@ -24,12 +25,20 @@ CATEGORIS: dict = {
 
 ROLES: dict = {
     "Admin": 1025432915561168896,
+    "Mod": 1039261745396600912,
     "Hacker": 1025436309851996191,
     "Squad-Leader": 1030199156947558510,
     "Squad-CoLeader": 1030440951077929020,
     "Squad-Master": 1030574174512623616,
     "Squad-Recruit": 1030572112068485212,
 }
+
+
+SQUAD_NAMES_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-"
+NICKS_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-0134_ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+#PASSWDS_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+OS_LIST: tuple = ("Debian", "Ubuntu", "Parrot", "macOS", "Windows")
+
 
 GLOBAL_HELP: str = """
 # Commands:
@@ -48,26 +57,25 @@ GLOBAL_HELP: str = """
     - !close -------------> stop game's bot
 """
 
-SQUAD_HELP: str = """
+SQUAD_HELP: str = f"""
 # Commands:
   
   (N) = not implemented yet
   ## Member commands:
-    - help --------------------> display this commands' help message
-    - register <nick><passwd> -> create a new VM for yourself, password should be fake, don't use any real data!
-    - panel -------------------> (N)display basic info about squad
-    - time --------------------> display server time
-    - whois <IP> --------------> display squad and nick of the player with that IP
+    - help ----------------> display this commands' help message
+    - register <nick><OS> -> create a new Virtua Machine (VM) for yourself,
+        avielable OS: {OS_LIST}
+    - panel ---------------> (N)display basic info about squad
+    - time ----------------> display server time
+    - whois <IP> ----------> display squad and nick of the player with that IP
   
   ## (Co)Lider commands:
-    - promote <nick> ----------> (N)promote a member by one rank
-    - demote <nick> -----------> (N)demote a member by one rank
-    - farewell <nick> ---------> (N)dismiss a member from the squad
+    - !enroll --------------> Open/close enrollment to squad
+    - !promote <nick> ------> (N)promote a member by one rank
+    - !demote <nick> -------> (N)demote a member by one rank
+    - !farewell <nick> -----> (N)dismiss a member from the squad
 """
 
-SQUAD_NAMES_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-"
-NICKS_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-0134_ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-PASSWDS_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 class Server:
@@ -100,7 +108,7 @@ class Server:
         squad_channel: discord.TextChannel = None
         default_channel: discord.TextChannel = None
 
-        self.network.add_squad(squad_name)
+        self.network.add_squad(squad_name, leader.display_name)
 
         default_channel = self.guild.get_channel(CHANNELS["default"])
         squad_channel = await default_channel.clone(name=squad_name)
@@ -121,7 +129,8 @@ class Server:
             if channel.name == squad_name:
                 squad_channel = channel
                 break
-            
+        
+        self.network.squads[squad_name].members[member.display_name] = "Squad-Recruit"
         await member.add_roles(self.guild.get_role(ROLES["Squad-Recruit"]))
         await squad_channel.set_permissions(member, read_messages=True, send_messages=True, add_reactions=True, read_message_history=True)
         
@@ -169,9 +178,13 @@ class Server:
     async def __send__(self, content: str, channel: discord.TextChannel, user: discord.Member):
         await channel.send(f"{user.mention}\n```\n{content}\n```")
 
+    async def __cls__(self, channel: discord.TextChannel):
+        async for message in channel.history():
+            await message.delete()
+            await asyncio.sleep(0.7)
 
     async def __terminal__(self, terminal: discord.TextChannel, author: discord.Member, args: tuple) -> None:
-        checkpoint: bool = None
+        #checkpoint: bool = None
 
         if args[0] == "help":
             await self.__send__(GLOBAL_HELP, terminal, author)
@@ -180,17 +193,16 @@ class Server:
             if self.__check_role__(author, ROLES["Admin"]) is False:
                 await self.__send__("Don't bother yourself :) It's an admin's duty.", terminal, author)
                 return
+
             if args[0] == "!clear":
-                async for message in terminal.history():
-                    await message.delete()
-                    await asyncio.sleep(0.7)
+                await self.__cls__(terminal)
 
             if args[0] == "!save":
                 self.network.save()
                 await self.__send__("Database updated.", terminal, author)
             
             if args[0] == "!close":
-                await terminal.send("@here\n```\nShutting down...\n```")#self.__send__("Shutting down...", terminal, author)
+                await terminal.send("```\nShutting down...\n```")#self.__send__("Shutting down...", terminal, author)
                 #self.state = False
                 self.network.running = False
                 self.network_thread.join()
@@ -204,14 +216,19 @@ class Server:
                 await self.__send__("Incorrect amount of arguments. Take a look at 'help' command.")
                 return
 
-            checkpoint = False
-            for squad in self.network.squads.values():
-                if squad.name == args[1]:
-                    checkpoint = True
-                    break
+            # checkpoint = False
+            # for squad in self.network.squads.values():
+            #     if squad.name == args[1]:
+            #         checkpoint = True
+            #         break
         
-            if checkpoint is False:
+            # if checkpoint is False:
+            if not args[1] in self.network.squads.keys():
                 await self.__send__("Squad not found :(", terminal, author)
+                return
+            
+            if self.network.squads[args[1]].recruting is False:
+                await self.__send__("Squad is not enrolling new members :(", terminal, author)
                 return
 
             await self.__join_member__(author, args[1])
@@ -238,6 +255,22 @@ class Server:
         if args[0] == "help":
             await self.__send__(SQUAD_HELP, squad_terminal, author)
         
+        elif args[0][0] == '!':
+            if self.__check_role__(author, ROLES["Squad-Leader"]) is False and self.__check_role__(author, ROLES["Squad-CoLeader"]) is False and self.__check_role__(author, ROLES["Mod"]) is False:
+                await self.__send__("Don't bother yourself :) It's an (co)leader's duty.", squad_terminal, author)
+                return
+
+            if args[0] == "!clear":
+                await self.__cls__(squad_terminal)
+
+            elif args[0] == "!enroll":
+                self.network.squads[squad_terminal.name].recruting = not(self.network.squads[squad_terminal.name].recruting)
+                
+                if self.network.squads[squad_terminal.name].recruting is True:
+                    await self.__send__("Recruitment is open for everyone!", squad_terminal, author)
+                else:
+                    await self.__send__("Recruitment is finished for now.", squad_terminal, author)
+        
         elif args[0] == "register":
         
             if self.__check_role__(author, ROLES["Hacker"]) is True:
@@ -249,17 +282,17 @@ class Server:
             if self.__check_name__(args[1], NICKS_ALPHABET, 14) is False:
                 await self.__send__(f"Incorrect nick!\n- Avielable characters:\n{NICKS_ALPHABET}\n- Max lenght:\n14", squad_terminal, author)
                 return
-            if self.__check_name__(args[2], PASSWDS_ALPHABET, 6) is False:
-                await self.__send__(f"Incorrect password!\n- Avielable characters:\n{PASSWDS_ALPHABET}\n- Max lenght:\n6", squad_terminal, author)
+            if not args[2] in OS_LIST:
+                await self.__send__(f"Incorrect operating system's name!\n- OS list:\n{OS_LIST}", squad_terminal, author)
                 return
 
-            if self.__check_role__(author, ROLES["Squad-Leader"]) is True:
-                self.network.add_vm(args[1], args[2], squad_terminal.name, "Leader")
-            else:
-                self.network.add_vm(args[1], args[2], squad_terminal.name, "Recruit")
+            # if self.__check_role__(author, ROLES["Squad-Leader"]) is True:
+            self.network.add_vm(author.display_name, args[1], args[2], squad_terminal.name)
+            # else:
+                # self.network.add_vm(args[1], args[2], squad_terminal.name, "Recruit")
 
-            await author.edit(nick=args[1])
             await author.add_roles(self.guild.get_role(ROLES["Hacker"]))
+            await author.edit(nick=args[1])
             await self.__send__("Welcome hacker! Now you can log in and play.", squad_terminal, author)
         
         elif args[0] == "time":
@@ -286,10 +319,15 @@ class Server:
 
     def __init__(self, db_filename: str):
         self.network = Network(db_filename)
-        self.bot = discord.Client(intents=discord.Intents.all())
+        self.bot = discord.Client(intents=discord.Intents.all())#commands.Bot(command_prefix='$', intents=discord.Intents.all())
         
         self.network_thread = threading.Thread(target=self.network.cpu_loop)
         self.network_thread.start()
+        
+        #@self.bot.command()
+        #async def hello(ctx: commands.Context):
+        #    await ctx.send("Hello, World!")
+        
 
         @self.bot.event
         async def on_ready() -> None:
@@ -301,6 +339,7 @@ class Server:
 
         @self.bot.event
         async def on_message(message: discord.Message) -> None:
+            #await self.bot.process_commands(message)
             author: discord.Member = None
             channel: discord.TextChannel = None
             args: list = None

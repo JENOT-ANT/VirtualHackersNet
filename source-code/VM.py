@@ -25,6 +25,7 @@ VM_HELP: str = """
 # Commands:
 
   - >help -------------------> display this commands' help message
+  - >panel ------------------> display dashboard with info about the machine
   - >ls ---------------------> list files of currently logged user
   - >cat <filename> ---------> display content of the file
   - >whoami -----------------> display currently-logged user's nick and IP
@@ -59,6 +60,7 @@ class VM:
     nick: str = None
     squad: str = None
     ip: str = None
+    os: str = None
     wallet: int = None
     #t_zone: int = None
 
@@ -88,19 +90,20 @@ class VM:
         return f"{self.nick} {self.ip}"
     
     def dashboard(self) -> str:
+        
         return f"""
-________________________________________
-|>{                 self.whoami():^36}<|
-|--------------------------------------|
-|{f'{self.wallet} [CV]':<13} {asctime(gmtime()):>24}|
-|                                      |
-|                                      |
-|                                      |
-|                                      |
-|                                      |
-|                                      |
-|                                      |
-|______________________________________|
+_______________________________________
+|>{                self.whoami():^35}<|
+|-------------------------------------|
+|{f'{self.wallet} [CV]':<12} {asctime(gmtime()):>24}|
+|=====================================|
+|{f'OS ({self.os}): {self.software["kernel"]}':^18}|{f'Miner: {self.software["miner"]}':^18}|
+|{f'AI: {self.software["AI"]}':^18}|{f'vsh: {self.software["vsh"]}':^18}|
+|{               'Latest-events':=^37}|
+|                                     |
+|                                     |
+|                                     |
+|_____________________________________|
         """
 
     def exit(self, client_ip: str):
@@ -110,10 +113,11 @@ ________________________________________
         self.processor.append(Process(cmd, file, line))
 
 
-    def __init__(self, nick: str, squad: str, ip: str, wallet: int, software: dict, files: dict, port_config: dict):
+    def __init__(self, nick: str, squad: str, ip: str, os: str, wallet: int, software: dict, files: dict, port_config: dict):
         self.nick = nick
         self.squad = squad
         self.ip = ip
+        self.os = os
         self.wallet = wallet
         self.software = software
         self.files = files
@@ -147,6 +151,7 @@ ________________________________________
             "nick": self.nick,
             "squad": self.squad,
             "ip": self.ip,
+            "os": self.os,
             "wallet": self.wallet,
             "software": self.software,
             "files": self.files,
