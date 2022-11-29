@@ -8,7 +8,7 @@
 \*Discord server members | \*\*In-game teams
 
 ## 📜 Description:
-  - A **text game** based on a **Discord server**, that simulates a **virtual network**. 
+  - A **text/commands game** based on a **Discord server**, that simulates a **virtual network**. 
   - **The final idea behind it is simple: join (or gather) squad, protect your game's virtual machine, hack others, trade and gather virtual currency.**
   - **You can join game here** -> **https://discord.gg/w8C8muuv** and become one of the first member of the community!
     > right now the game is in an early stage of developement and the major part of planned features dosen't work.
