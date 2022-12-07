@@ -10,7 +10,7 @@ from time import sleep
 FREQUENCY: int = 0.5
 MAX_CV: int = int(1e9)
 MAX_CV_HASH: int = 10000
-FOUND_CV_AMOUNT: int = 10
+FOUND_CV_AMOUNT: int = 5
 
 PASSWD_LENGHT: int = 4
 PASSWDS_ALPHABET: str = "02458AMPQYZ"
@@ -23,11 +23,35 @@ SYSTEM_PORTS: dict = {
 
 DEFAULT_OS: str = "Debian"
 
+OFFER_TYPES: dict = {
+    "update": 0,
+    "exploit": 1,
+    "ip_list": 2,
+}
+
+class Offer:
+
+    seller: str = None
+    type: int = None
+    price: int = None
+    content: str = None
+
+
+    def __init__(self, seller: str, type: int, price: int, content: str):
+        self.seller = seller
+        self.type = type
+        self.price = price
+        self.content = content
+
+
+
+
 class Network:
     '''class for handling virtual network'''
     running: bool = False
 
     bank: int = None
+    offers: list = None
     squads: dict = None
 
     by_ip: dict = None
@@ -71,7 +95,7 @@ class Network:
 
         if len(args) == 2 and args[1] in self.by_nick.keys() and args[0] == self.__cv_hash__:
             print(f"Found by {args[1]}")
-            if self.transfer(FOUND_CV_AMOUNT, args[1]) is True:
+            if self.transfer(FOUND_CV_AMOUNT + self.by_nick[args[1]].software["miner"], args[1]) is True:
                 self.send((self.by_nick[args[1]].ip, 7676), (SYSTEM_IP, SYSTEM_PORTS["mine"]), "found")
             
             self.__cv_hash__ = str(randint(0, MAX_CV_HASH))
@@ -239,7 +263,17 @@ class Network:
             answer = self.recv(7676, vm)
             
             if answer.source[0] == SYSTEM_IP and answer.content == "found":
-                vm.add_to_log(f"Found {FOUND_CV_AMOUNT} [CV] by miner.")
+                vm.add_to_log(f"Found {FOUND_CV_AMOUNT + vm.software['miner']} [CV] by miner.")
+    
+    def buy(self, id: int, buyer: str) -> str:
+
+        if self.transfer(self.offers[id].price, self.offers[id].seller, buyer) is False:
+            return "Purchase failed."
+        else:
+            if self.offers[id].type == OFFER_TYPES["update"]:
+                self.by_nick[buyer].software[self.offers[id].content] += 1
+            
+            return f"{buyer} has just bought #{id} from exchange."
 
     def __generate_ip__(self) -> str:
         ip: str = f"{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}"
@@ -296,6 +330,12 @@ class Network:
         self.by_nick = {}
         self.system = {}
         self.bank = MAX_CV
+        self.offers = [
+            Offer(None, OFFER_TYPES["update"], 200, "kernel"),
+            Offer(None, OFFER_TYPES["update"], 100, "vsh"),
+            Offer(None, OFFER_TYPES["update"], 100, "AI"),
+            Offer(None, OFFER_TYPES["update"], 300, "miner"),
+        ]
         self.__load__()
 
     def send(self, destination: tuple, source: tuple, content: str) -> None:

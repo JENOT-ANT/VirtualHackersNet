@@ -75,8 +75,13 @@ class VM:
     forward_to: dict = None#{user-form-logged_in: target-address}
 
     def add_to_log(self, content: str):
+        lines_amount: int = self.files["log.sys"].count("\n") + 1
+        
         self.files["log.sys"] += f"\no [{gmtime().tm_mon:0>2}/{gmtime().tm_mday:0>2}; {gmtime().tm_hour:0>2}:{gmtime().tm_min:0>2}] -> {content}"
-
+        
+        if lines_amount > 20:
+            "\n".join(self.files["log.sys"].splitlines()[lines_amount - 20:])
+            
     def help(self) -> str:
         return VM_HELP
     
@@ -90,6 +95,18 @@ class VM:
         return f"{self.nick} {self.ip}"
     
     def dashboard(self) -> str:
+        lines: list = self.files["log.sys"].splitlines()
+        lines_amount: int = len(lines)
+        line1: str = None
+        line2: str = None
+        line3: str = None
+        
+        if lines_amount >= 1:
+            line1 = lines[lines_amount - 1][20:]
+        if lines_amount >= 2:
+            line2 = lines[lines_amount - 2][20:]
+        if lines_amount >= 3:
+            line3 = lines[lines_amount - 3][20:]
         
         return f"""
 _______________________________________
@@ -100,9 +117,9 @@ _______________________________________
 |{f'OS ({self.os}): {self.software["kernel"]}':^18}|{f'Miner: {self.software["miner"]}':^18}|
 |{f'AI: {self.software["AI"]}':^18}|{f'vsh: {self.software["vsh"]}':^18}|
 |{               'Latest-events':=^37}|
-|                                     |
-|                                     |
-|                                     |
+|{                          line1:^37}|
+|{                          line2:^37}|
+|{                          line3:^37}|
 |_____________________________________|
         """
 

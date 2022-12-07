@@ -18,9 +18,10 @@ CHANNELS: dict = {
     "exchange": 1041788707134521444,
 }
 
-CATEGORIS: dict = {
+CATEGORIES: dict = {
     "GLOBAL": 1024343901038985270,
     "SQUADS": 1025444416527278131,
+    "STORE": 1049431906766307398,
 }
 
 ROLES: dict = {
@@ -50,6 +51,7 @@ GLOBAL_HELP: str = """
     - info <squad-name> --> (N)display details about the squad
     - join <squad-name> --> join the squad
     - squad <squad-name> -> create a new squad
+    - bank ---------------> display currency owned by the system
   
   ## Admin commands:
     - !clear -------------> delete all messages in the terminal
@@ -76,7 +78,28 @@ SQUAD_HELP: str = f"""
     - !farewell <nick> -----> (N)dismiss a member from the squad
 """
 
-
+HACK_THE_PLANET = r"""
+      _    _     __      ___   _   __
+     | |__| |   /  \    / __| | | / /
+     |  __  |  / == \  | |__  | |> |
+     |_|  |_| /_/  \_\  \___| |_| \_\
+          _____   _    _   _ ____
+         |_____| | |__| | | |___/
+           | |   |  __  | | |__|
+           |_|   |_|  |_| |_|___\
+ ____   _        __     _   _   _ ____  _____
+| |  \ | |      /  \   | \ | | | |___/ |_____|
+| |__/ | |__   / == \  |  ^  | | |__|    | |
+|_|    |____| /_/  \_\ |_| \_| |_|___\   |_|
+                  _________
+                 /   / \   \
+                / \ /   \ / \
+               |---|- @ -|---|
+               |===|=  @=|===|
+               |---|-@@@-|---|
+                \ / \   / \ /
+                 \___\_/___/
+"""
 
 class Server:
 
@@ -177,7 +200,7 @@ class Server:
 
     async def __send__(self, content: str, channel: discord.TextChannel, user: discord.Member):
         await channel.send(f"{user.mention}\n```\n{content}\n```")
-
+    
     async def __cls__(self, channel: discord.TextChannel):
         async for message in channel.history():
             await message.delete()
@@ -197,17 +220,21 @@ class Server:
             if args[0] == "!clear":
                 await self.__cls__(terminal)
 
-            if args[0] == "!save":
+            elif args[0] == "!save":
                 self.network.save()
                 await self.__send__("Database updated.", terminal, author)
             
-            if args[0] == "!close":
+            elif args[0] == "!close":
                 await terminal.send("```\nShutting down...\n```")#self.__send__("Shutting down...", terminal, author)
                 #self.state = False
                 self.network.running = False
                 self.network_thread.join()
                 await self.bot.close()
-        
+            
+            elif args[0] == "!planet":
+                await terminal.send(f"**```\n{HACK_THE_PLANET}\n```**")
+
+
         elif args[0] == "join":
             if self.__check_role__(author, ROLES["Squad-Recruit"]) is True or self.__check_role__(author, ROLES["Squad-Master"]) is True or self.__check_role__(author, ROLES["Squad-CoLeader"]) is True or self.__check_role__(author, ROLES["Squad-Leader"]) is True:
                 await self.__send__("Your current squad needs you :)", terminal, author)
@@ -249,7 +276,9 @@ class Server:
             
         elif args[0] == "list":
             await self.__send__(self.__list__squads__(), terminal, author)
-    
+
+        elif args[0] == "bank":
+            await self.__send__(f"System account: {self.network.bank:_} [CV]", terminal, author)
 
     async def __squad__(self, squad_terminal: discord.TextChannel, author: discord.Member, args: tuple):
         if args[0] == "help":
@@ -350,19 +379,39 @@ class Server:
             if author == self.bot.user:
                 return
             
-            if channel.category_id == CATEGORIS["GLOBAL"] and channel.id != CHANNELS["terminal"]:
+            if channel.category_id == CATEGORIES["GLOBAL"] and channel.id != CHANNELS["terminal"]:
                 return
             
             
             args = message.content.split()
 
-            if channel.category_id == CATEGORIS["SQUADS"]:
+            if channel.category_id == CATEGORIES["SQUADS"]:
                 print(args)
                 await self.__squad__(channel, author, args)
 
             elif channel.id == CHANNELS["terminal"]:
                 print(args)
                 await self.__terminal__(channel, author, args)
+
+        @self.bot.event
+        async def on_reaction_add(reaction: discord.Reaction, author: discord.Member):
+            return
+            message: discord.Message = reaction.message
+
+        @self.bot.event
+        async def on_raw_reaction_add(reaction: discord.RawReactionActionEvent):
+            offer: discord.Thread = None
+            message: discord.Message = None
+
+            offer = self.guild.get_channel_or_thread(reaction.channel_id)
+            if offer.category_id != CATEGORIES["STORE"]:
+                return
+
+            await self.__send__(self.network.buy(int(offer.name.split()[1]), reaction.member.display_name), self.guild.get_channel(CHANNELS["terminal"]), reaction.member)
+            
+            await asyncio.sleep(1)
+            message = await offer.fetch_message(reaction.message_id)
+            await message.clear_reactions()
 
     
     def start(self, api_token: str):
