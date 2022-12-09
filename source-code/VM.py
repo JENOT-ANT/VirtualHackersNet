@@ -32,6 +32,8 @@ VM_HELP: str = """
   - >exit -------------------> close last vsh connection
   - >vsh <IP><port><passwd> -> connect to IP's VM (Virtual Machine)
   - >proxy ------------------> display your vsh connection path
+  - >time -------------------> display server time
+  - >whois <IP> -------------> display squad and nick of the player with that IP
 """
 
 
@@ -124,7 +126,8 @@ _______________________________________
         """
 
     def exit(self, client_ip: str):
-        self.logged_in.remove(client_ip)
+        if client_ip != self.nick:
+            self.logged_in.remove(client_ip)
 
     def start(self, cmd: str, file: str=None, line: int=None):
         self.processor.append(Process(cmd, file, line))

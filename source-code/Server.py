@@ -54,6 +54,7 @@ GLOBAL_HELP: str = """
     - bank ---------------> display currency owned by the system
   
   ## Admin commands:
+    - !gift <CV><nick> ---> transfer some CV to the player
     - !clear -------------> delete all messages in the terminal
     - !save --------------> save game's data to a database
     - !close -------------> stop game's bot
@@ -69,7 +70,6 @@ SQUAD_HELP: str = f"""
         avielable OS: {OS_LIST}
     - panel ---------------> (N)display basic info about squad
     - time ----------------> display server time
-    - whois <IP> ----------> display squad and nick of the player with that IP
   
   ## (Co)Lider commands:
     - !enroll --------------> Open/close enrollment to squad
@@ -199,7 +199,7 @@ class Server:
         await self.__send__(message, squad_terminal, author)
 
     async def __send__(self, content: str, channel: discord.TextChannel, user: discord.Member):
-        await channel.send(f"{user.mention}\n```\n{content}\n```")
+        await channel.send(f"{user.mention}\n```q\n{content}\n```")
     
     async def __cls__(self, channel: discord.TextChannel):
         async for message in channel.history():
@@ -234,6 +234,18 @@ class Server:
             elif args[0] == "!planet":
                 await terminal.send(f"**```\n{HACK_THE_PLANET}\n```**")
 
+            elif args[0] == "!gift":
+                if len(args) != 3:
+                    await self.__send__("Incorrect amount of arguments. Take a look at 'help' command.", terminal, author)
+                    return
+                if not args[2] in self.network.by_nick.keys():
+                    await self.__send__("VM not found!", terminal, author)
+                    return
+                if args[1].isdigit() is False:
+                    await self.__send__("Incorrect transfer value!", terminal, author)
+                    return
+
+                self.network.transfer(int(args[1]), args[2])
 
         elif args[0] == "join":
             if self.__check_role__(author, ROLES["Squad-Recruit"]) is True or self.__check_role__(author, ROLES["Squad-Master"]) is True or self.__check_role__(author, ROLES["Squad-CoLeader"]) is True or self.__check_role__(author, ROLES["Squad-Leader"]) is True:
@@ -242,14 +254,6 @@ class Server:
             if len(args) != 2:
                 await self.__send__("Incorrect amount of arguments. Take a look at 'help' command.")
                 return
-
-            # checkpoint = False
-            # for squad in self.network.squads.values():
-            #     if squad.name == args[1]:
-            #         checkpoint = True
-            #         break
-        
-            # if checkpoint is False:
             if not args[1] in self.network.squads.keys():
                 await self.__send__("Squad not found :(", terminal, author)
                 return
@@ -279,6 +283,8 @@ class Server:
 
         elif args[0] == "bank":
             await self.__send__(f"System account: {self.network.bank:_} [CV]", terminal, author)
+        
+        
 
     async def __squad__(self, squad_terminal: discord.TextChannel, author: discord.Member, args: tuple):
         if args[0] == "help":
@@ -324,10 +330,10 @@ class Server:
             await author.edit(nick=args[1])
             await self.__send__("Welcome hacker! Now you can log in and play.", squad_terminal, author)
         
-        elif args[0] == "time":
+        elif args[0] == ">time" or args[0] == "time":
             await self.__send__(f"It's <{asctime(gmtime())}> in the game.", squad_terminal, author)
 
-        elif args[0] == "whois":
+        elif args[0] == ">whois":
             if len(args) != 2:
                 await self.__send__("Incorrect amount of arguments. Take a look at 'help' command.", squad_terminal, author)
                 return
@@ -337,6 +343,11 @@ class Server:
                 return
             
             await self.__send__(f"{args[1]}:\n\tnick: {self.network.by_ip[args[1]].nick}\n\tsquad: {self.network.by_ip[args[1]].squad}", squad_terminal, author)
+
+        elif args[0] == ">ai":
+            if len(args) != 3:
+                await self.__send__("Incorrect amount of arguments. Take a look at 'help' command.", squad_terminal, author)
+                return
 
         elif args[0][0] == ">":
             if self.__check_role__(author, ROLES["Hacker"]) is False:

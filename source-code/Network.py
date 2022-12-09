@@ -10,7 +10,7 @@ from time import sleep
 FREQUENCY: int = 0.5
 MAX_CV: int = int(1e9)
 MAX_CV_HASH: int = 10000
-FOUND_CV_AMOUNT: int = 5
+FOUND_CV_AMOUNT: int = 4
 
 PASSWD_LENGHT: int = 4
 PASSWDS_ALPHABET: str = "02458AMPQYZ"
@@ -119,9 +119,13 @@ class Network:
                 self.vsh(target)
                 answer = self.recv(2222, vm)
                 
-                if answer.content == "disconnect":
+                if answer.content.split()[0] == "disconnect":
                     vm.forward_to.pop(packet.source[0])
                     iosout = f"Connection to {target.nick}({target.ip}) has been closed."
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+                elif answer.content.split()[0] == "proxy":
+                    iosout = f"{answer.content}<{vm.nick}"
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                     return iosout
 
@@ -173,6 +177,13 @@ class Network:
                 iosout = "disconnect"
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
+            
+            elif args[0] == ">proxy":
+                iosout = f"proxy {vm.nick}"
+                
+                self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return iosout
+
 
             elif args[0] == ">vsh":
                 if len(args) != 4:
@@ -255,8 +266,9 @@ class Network:
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
     
-    def miner(self, vm: VM):
+    def vm_miner(self, vm: VM):
         answer: Packet = None
+        
         self.send((SYSTEM_IP, SYSTEM_PORTS["mine"]), (vm.ip, 7676), f"{random.randint(0, MAX_CV_HASH)} {vm.files['miner.config']}")
 
         if 7676 in vm.network.keys():
@@ -355,8 +367,12 @@ class Network:
 
         while self.running is True:
             for vm in self.by_nick.values():
-                self.miner(vm)
+                self.vm_miner(vm)
                 self.sys_mine()
+
+                for _ in range(0, int(vm.software["miner"] / 2)):
+                    self.vm_miner(vm)
+                    self.sys_mine()
             
             sleep(FREQUENCY)
 
