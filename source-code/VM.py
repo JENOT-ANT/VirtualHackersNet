@@ -24,16 +24,34 @@ DEFAULT_FILES: dict = {
 VM_HELP: str = """
 # Commands:
 
-  - >help -------------------> display this commands' help message
-  - >panel ------------------> display dashboard with info about the machine
-  - >ls ---------------------> list files of currently logged user
-  - >cat <filename> ---------> display content of the file
-  - >whoami -----------------> display currently-logged user's nick and IP
-  - >exit -------------------> close last vsh connection
-  - >vsh <IP><port><passwd> -> connect to IP's VM (Virtual Machine)
-  - >proxy ------------------> display your vsh connection path
-  - >time -------------------> display server time
-  - >whois <IP> -------------> display squad and nick of the player with that IP
+  ## General:
+
+    - >help -------------------> display this commands' help message
+    
+    - >panel ------------------> display dashboard with info about the machine
+    
+    - >bf <hash> --------------> brutforce hash to find password
+  
+  ## Files:
+    
+    - >ls ---------------------> list files of currently logged user
+    
+    - >cat <filename> ---------> display content of the file
+  
+  ## VSH:
+    
+    - >vsh <IP><port><passwd> -> connect to IP's VM (Virtual Machine)
+
+    - >whoami -----------------> display currently-logged user's nick and IP
+  
+    - >exit -------------------> close last vsh connection
+  
+    - >proxy ------------------> display your vsh connection path
+  
+    - >time -------------------> display server time
+  
+    - >whois <IP> -------------> display squad and nick of the player with that IP
+  
 """
 
 
@@ -47,15 +65,25 @@ class Packet:
 
 
 class Process:
-    cmd: str = None
-    file: str = None
-    line: int = None
+    system: bool = None 
+    cmds: list[tuple[str]] = None
+    pointer: int = None
+    memory: dict[str] = None
 
-    def __init__(self, cmd: str, file: str=None, line: int=None):
-        self.cmd = cmd
-        self.file = file
-        self.line = line
+    def __init__(self, cmds: list[tuple[str]], system: bool):
+        self.cmds = cmds
+        self.system = system
+        self.pointer = 0
+        self.memory = []
+        self.indexes = {}
 
+    def pop(self) -> tuple[str]:
+        cmd: tuple[str] = self.cmds[self.pointer]
+        
+        self.pointer += 1
+        self.pointer = self.pointer % len(self.cmds)
+        
+        return cmd
 
 class VM:
     '''class that represents single virtual machine'''
@@ -67,23 +95,45 @@ class VM:
     #t_zone: int = None
 
     software: dict = None#{vtp, miner, AI, kernel, vsh, dns}
-    files: dict = None
+    files: dict[str, str] = None
 
     network: dict = None
-    processor: list = None
+    processor: list[Process] = None
 
     port_config: dict = None#{software: port}
     logged_in: list = None
     forward_to: dict = None#{user-form-logged_in: target-address}
 
+
+    def add(self, file_name: str, content: str) -> str:
+
+        if file_name in self.files.keys():
+            if (self.files[file_name].count('\n') + 1) < 20:
+                self.files[file_name] += f"\n{content}"
+            else:
+                return "Failed to add! Max file size reached."
+        else:
+            self.files[file_name] = content
+        
+        return "File has been updated."
+    
     def add_to_log(self, content: str):
         lines_amount: int = self.files["log.sys"].count("\n") + 1
         
         self.files["log.sys"] += f"\no [{gmtime().tm_mon:0>2}/{gmtime().tm_mday:0>2}; {gmtime().tm_hour:0>2}:{gmtime().tm_min:0>2}] -> {content}"
         
         if lines_amount > 20:
-            "\n".join(self.files["log.sys"].splitlines()[lines_amount - 20:])
+            self.files["log.sys"] = "\n".join(self.files["log.sys"].splitlines()[lines_amount - 20:])
             
+    def start(self, code: str, by_system=False):
+        cmds: list[tuple[str]] = []
+
+        for line in code.splitlines():
+            if line != '':
+                cmds.append(tuple(line.split()))
+
+        self.processor.append(Process(cmds, by_system))
+
     def help(self) -> str:
         return VM_HELP
     
@@ -129,8 +179,8 @@ _______________________________________
         if client_ip != self.nick:
             self.logged_in.remove(client_ip)
 
-    def start(self, cmd: str, file: str=None, line: int=None):
-        self.processor.append(Process(cmd, file, line))
+    #def start(self, cmd: str, file: str=None, line: int=None):
+    #    self.processor.append(Process(cmd, file, line))
 
 
     def __init__(self, nick: str, squad: str, ip: str, os: str, wallet: int, software: dict, files: dict, port_config: dict):

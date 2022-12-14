@@ -1,10 +1,10 @@
 import shelve
 import random
 from Squad import Squad
-from VM import VM, Packet, Process
+from VM import VM, Packet
 from hashlib import md5
 from random import randint, choices
-from time import sleep
+from time import sleep, time
 
 
 FREQUENCY: int = 0.5
@@ -14,6 +14,7 @@ FOUND_CV_AMOUNT: int = 4
 
 PASSWD_LENGHT: int = 4
 PASSWDS_ALPHABET: str = "02458AMPQYZ"
+MAX_GUESS: int = len(PASSWDS_ALPHABET)**4
 
 SYSTEM_IP: str = "0.0.0.0"
 
@@ -28,6 +29,7 @@ OFFER_TYPES: dict = {
     "exploit": 1,
     "ip_list": 2,
 }
+
 
 class Offer:
 
@@ -51,13 +53,13 @@ class Network:
     running: bool = False
 
     bank: int = None
-    offers: list = None
-    squads: dict = None
+    offers: list[Offer] = None
+    squads: dict[str, Squad] = None
 
-    by_ip: dict = None
-    by_nick: dict = None
+    by_ip: dict[str, VM] = None
+    by_nick: dict[str, VM] = None
 
-    system: dict = None
+    system: dict[int, Packet] = None
 
     __cv_hash__: str = None
     __db_filename__: str = None
@@ -99,6 +101,11 @@ class Network:
                 self.send((self.by_nick[args[1]].ip, 7676), (SYSTEM_IP, SYSTEM_PORTS["mine"]), "found")
             
             self.__cv_hash__ = str(randint(0, MAX_CV_HASH))
+
+    #def start_bf(self, hash: str, user: str) -> bool:
+        
+        
+        
 
     def vsh(self, vm: VM) -> str:
         packet: Packet = None
@@ -277,6 +284,39 @@ class Network:
             if answer.source[0] == SYSTEM_IP and answer.content == "found":
                 vm.add_to_log(f"Found {FOUND_CV_AMOUNT + vm.software['miner']} [CV] by miner.")
     
+    def start_bf(self, nick: str, hashed: str):
+        self.by_nick[nick].files["BF.proc"] = f"{hashed} 0"
+
+    def vm_bf(self, vm: VM) -> bool:
+        guess: str = ""
+        hashed: str = None
+        principle = None
+        
+        if not "BF.proc" in vm.files.keys():
+            return
+        if vm.files["BF.proc"] == "False":
+            return
+
+        hashed, principle = vm.files["BF.proc"].split()
+        principle = int(principle)
+        
+        if principle > MAX_GUESS:
+            vm.add_to_log("Bruteforce failed.")
+            vm.files["BF.proc"] = "False"
+            return
+        
+        vm.files["BF.proc"] = f"{hashed} {principle + 1}"
+
+        for i in range(0, PASSWD_LENGHT):
+            guess += PASSWDS_ALPHABET[principle % len(PASSWDS_ALPHABET)]
+            principle = principle // len(PASSWDS_ALPHABET)
+
+        #print(guess)
+        if md5(guess.encode("ascii")).hexdigest() == hashed:
+            vm.files["BF.proc"] = "False"
+            vm.add("pass.txt", f"{hashed} => {guess}")
+            vm.add_to_log("Bruteforce completed.")
+    
     def buy(self, id: int, buyer: str) -> str:
 
         if self.transfer(self.offers[id].price, self.offers[id].seller, buyer) is False:
@@ -364,15 +404,25 @@ class Network:
             return self.system.pop(port)
 
     def cpu_loop(self):
+        # cmd: tuple = None
 
         while self.running is True:
             for vm in self.by_nick.values():
+                self.vm_bf(vm)
+                
                 self.vm_miner(vm)
                 self.sys_mine()
 
                 for _ in range(0, int(vm.software["miner"] / 2)):
                     self.vm_miner(vm)
                     self.sys_mine()
+                
+                # for i in range(0, len(vm.processor)):
+                #     cmd = vm.processor[i].pop()
+                    
+                #     if cmd[0] == "QUIT":
+                #         pass
+
             
             sleep(FREQUENCY)
 

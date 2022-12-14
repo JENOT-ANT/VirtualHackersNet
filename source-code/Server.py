@@ -46,17 +46,27 @@ GLOBAL_HELP: str = """
   
   (N) = not implemented yet
   ## Global commands:
+    
     - help ---------------> display this commands' help message
+    
     - list ---------------> display a list of squads
+    
     - info <squad-name> --> (N)display details about the squad
+    
     - join <squad-name> --> join the squad
+    
     - squad <squad-name> -> create a new squad
+    
     - bank ---------------> display currency owned by the system
   
   ## Admin commands:
+    
     - !gift <CV><nick> ---> transfer some CV to the player
+    
     - !clear -------------> delete all messages in the terminal
+    
     - !save --------------> save game's data to a database
+    
     - !close -------------> stop game's bot
 """
 
@@ -65,16 +75,24 @@ SQUAD_HELP: str = f"""
   
   (N) = not implemented yet
   ## Member commands:
+    
     - help ----------------> display this commands' help message
+    
     - register <nick><OS> -> create a new Virtua Machine (VM) for yourself,
         avielable OS: {OS_LIST}
+    
     - panel ---------------> (N)display basic info about squad
+    
     - time ----------------> display server time
   
-  ## (Co)Lider commands:
+  ## (Co)Leader commands:
+    
     - !enroll --------------> Open/close enrollment to squad
+    
     - !promote <nick> ------> (N)promote a member by one rank
+    
     - !demote <nick> -------> (N)demote a member by one rank
+    
     - !farewell <nick> -----> (N)dismiss a member from the squad
 """
 
@@ -335,7 +353,7 @@ class Server:
 
         elif args[0] == ">whois":
             if len(args) != 2:
-                await self.__send__("Incorrect amount of arguments. Take a look at 'help' command.", squad_terminal, author)
+                await self.__send__("Incorrect amount of arguments. Take a look at '>help' command.", squad_terminal, author)
                 return
 
             if not args[1] in self.network.by_ip.keys():
@@ -345,13 +363,29 @@ class Server:
             await self.__send__(f"{args[1]}:\n\tnick: {self.network.by_ip[args[1]].nick}\n\tsquad: {self.network.by_ip[args[1]].squad}", squad_terminal, author)
 
         elif args[0] == ">ai":
-            if len(args) != 3:
-                await self.__send__("Incorrect amount of arguments. Take a look at 'help' command.", squad_terminal, author)
+            if self.__check_role__(author, ROLES["Hacker"]) is False:
+                await self.__send__("You are not registered yet... See `help` cmd here.", squad_terminal, author)
                 return
+            if len(args) != 3:
+                await self.__send__("Incorrect amount of arguments. Take a look at '>help' command.", squad_terminal, author)
+                return
+            
+
+        elif args[0] == ">bf":
+            if self.__check_role__(author, ROLES["Hacker"]) is False:
+                await self.__send__("You are not registered yet... See `help` cmd here.", squad_terminal, author)
+                return
+            if len(args) != 2:
+                await self.__send__("Incorrect amount of arguments. Take a look at '>help' command.", squad_terminal, author)
+                return
+            
+            self.network.start_bf(author.display_name, args[1])
+            
+            await self.__send__("Started brutforce on the hash.", squad_terminal, author)
 
         elif args[0][0] == ">":
             if self.__check_role__(author, ROLES["Hacker"]) is False:
-                await self.__send__("You are not regstered yet... See `help` cmd here.", squad_terminal, author)
+                await self.__send__("You are not registered yet... See `help` cmd here.", squad_terminal, author)
                 return
             
             await self.__vsh__(args, squad_terminal, author)

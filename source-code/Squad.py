@@ -2,7 +2,7 @@ from VM import VM
 
 class Squad:
     name: str = None
-    members: dict = None
+    members: dict[str, str] = None
     recruting: bool = None
 
     def __init__(self, name: str, members: dict, recruting: bool):
