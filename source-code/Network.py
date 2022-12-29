@@ -1,6 +1,6 @@
 import shelve
 import random
-from Squad import Squad
+from Squad import Squad, RECRUIT, MASTER, COLEADER, LEADER
 from VM import VM, Packet
 from hashlib import md5
 from random import randint, choices
@@ -8,6 +8,7 @@ from time import sleep, time
 
 
 FREQUENCY: int = 0.5
+NOTIFICATION_CHANNEL: str = "terminal"
 MAX_CV: int = int(1e9)
 MAX_CV_HASH: int = 10000
 FOUND_CV_AMOUNT: int = 4
@@ -54,12 +55,13 @@ class Network:
 
     bank: int = None
     offers: list[Offer] = None
+    notifications: list[tuple[str]] = None# [(squad, member, content), ...]
     squads: dict[str, Squad] = None
 
     by_ip: dict[str, VM] = None
     by_nick: dict[str, VM] = None
 
-    system: dict[int, Packet] = None
+    system_network: dict[int, Packet] = None
 
     __cv_hash__: str = None
     __db_filename__: str = None
@@ -97,6 +99,9 @@ class Network:
 
         if len(args) == 2 and args[1] in self.by_nick.keys() and args[0] == self.__cv_hash__:
             print(f"Found by {args[1]}")
+
+            self.notifications.append((NOTIFICATION_CHANNEL, None, f"{args[1]} has just found CV hash."))
+            
             if self.transfer(FOUND_CV_AMOUNT + self.by_nick[args[1]].software["miner"], args[1]) is True:
                 self.send((self.by_nick[args[1]].ip, 7676), (SYSTEM_IP, SYSTEM_PORTS["mine"]), "found")
             
@@ -105,8 +110,6 @@ class Network:
     #def start_bf(self, hash: str, user: str) -> bool:
         
         
-        
-
     def vsh(self, vm: VM) -> str:
         packet: Packet = None
         answer: Packet = None
@@ -131,11 +134,18 @@ class Network:
                     iosout = f"Connection to {target.nick}({target.ip}) has been closed."
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                     return iosout
+
                 elif answer.content.split()[0] == "proxy":
-                    iosout = f"{answer.content}<{vm.nick}"
+                    iosout = f"{answer.content} < {vm.nick}"
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                     return iosout
-
+                
+                elif answer.content == "access denied":
+                    vm.forward_to.pop(packet.source[0])
+                    iosout = "Access denied! Not authenticated."
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+                    
                 iosout = answer.content
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
@@ -156,11 +166,6 @@ class Network:
             elif args[0] == ">cat":
                 if len(args) != 2:
                     iosout =  "Error! Incorrect amount of arguments. Check '>help' command."
-                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
-                    return iosout
-                
-                if not args[1] in vm.files.keys():    
-                    iosout = "Error! File not found."
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                     return iosout
 
@@ -191,6 +196,11 @@ class Network:
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
 
+            elif args[0] == ">close":
+                iosout = vm.close()
+
+                self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return iosout
 
             elif args[0] == ">vsh":
                 if len(args) != 4:
@@ -269,7 +279,7 @@ class Network:
                 return iosout
 
             else:
-                iosout = "Access denied! Not authenticated."
+                iosout = "access denied"
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
     
@@ -366,6 +376,13 @@ class Network:
 
         for squad in db["squads"]:
             self.squads[squad["name"]] = Squad(squad["name"], squad["members"], squad["recruting"])
+            
+            # for member in self.squads[squad["name"]].members.keys():
+            #     if self.squads[squad["name"]].members[member] == "Squad-Leader" or self.squads[squad["name"]].members[member] == "Leader":
+            #         self.squads[squad["name"]].members[member] = LEADER
+                
+            #     elif self.squads[squad["name"]].members[member] == "Squad-Recruit" or self.squads[squad["name"]].members[member] == "Recruit":
+            #         self.squads[squad["name"]].members[member] = RECRUIT
 
         if "bank" in db.keys():
             self.bank = db["bank"]
@@ -380,8 +397,11 @@ class Network:
         self.squads = {}
         self.by_ip = {}
         self.by_nick = {}
-        self.system = {}
+        self.system_network = {}
         self.bank = MAX_CV
+
+        self.notifications = []
+        
         self.offers = [
             Offer(None, OFFER_TYPES["update"], 200, "kernel"),
             Offer(None, OFFER_TYPES["update"], 100, "vsh"),
@@ -395,13 +415,16 @@ class Network:
             self.by_ip[destination[0]].network[destination[1]] = Packet(source, content)
         
         elif destination[0] == SYSTEM_IP:
-            self.system[destination[1]] = Packet(source, content)
+            self.system_network[destination[1]] = Packet(source, content)
 
     def recv(self, port: int, vm: VM=None) -> Packet:
         if vm != None:
             return vm.network.pop(port)
         else:
-            return self.system.pop(port)
+            return self.system_network.pop(port)
+
+    def set_passwd(self, nick: str):
+        self.by_nick[nick].files["shadow.sys"] = md5(self.__generate_password__().encode('ascii')).hexdigest()
 
     def cpu_loop(self):
         # cmd: tuple = None
@@ -428,18 +451,19 @@ class Network:
 
     def add_vm(self, old_name: str, nick: str, os: str, squad: str):
         ip: str = self.__generate_ip__()
-        password: str = self.__generate_password__()
+        #password: str = self.__generate_password__()
         
         self.by_nick[nick] = VM(nick, squad, ip, os, 0, {}, {}, {})
         self.by_ip[ip] = self.by_nick[nick]
 
-        self.by_nick[nick].files["shadow.sys"] = md5(password.encode('ascii')).hexdigest()
+        self.set_passwd(nick)
+        #self.by_nick[nick].files["shadow.sys"] = md5(password.encode('ascii')).hexdigest()
         
         self.squads[squad].members[nick] = self.squads[squad].members.pop(old_name)
 
     def add_squad(self, name: str, leader: str):
         self.squads[name] = Squad(name, {}, True)
-        self.squads[name].members[leader] = "Squad-Leader"
+        self.squads[name].members[leader] = LEADER
 
     def save(self):
         db: shelve.Shelf = None

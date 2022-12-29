@@ -1,12 +1,15 @@
 # Dev-notes:
 # Create change_passwd method in VM instead editing the "shadow.sys" in Network.add_vm method
-# Move chracter limits in creating password and nick, to some constants
+
 import discord
 #from discord.ext import commands
 from Network import Network
 import asyncio
 import threading
 from time import asctime, gmtime
+
+from Squad import RECRUIT, MASTER, COLEADER, LEADER
+
 
 SERVER_ID: int = 1024343901038985267
 
@@ -171,7 +174,7 @@ class Server:
                 squad_channel = channel
                 break
         
-        self.network.squads[squad_name].members[member.display_name] = "Squad-Recruit"
+        self.network.squads[squad_name].members[member.display_name] = RECRUIT
         await member.add_roles(self.guild.get_role(ROLES["Squad-Recruit"]))
         await squad_channel.set_permissions(member, read_messages=True, send_messages=True, add_reactions=True, read_message_history=True)
         
@@ -216,8 +219,11 @@ class Server:
         message = self.network.vsh(self.network.by_nick[nick])
         await self.__send__(message, squad_terminal, author)
 
-    async def __send__(self, content: str, channel: discord.TextChannel, user: discord.Member):
-        await channel.send(f"{user.mention}\n```q\n{content}\n```")
+    async def __send__(self, content: str, channel: discord.TextChannel, user: discord.Member=None):
+        if user == None:
+            await channel.send(f"```q\n{content}\n```")
+        else:
+            await channel.send(f"{user.mention}\n```q\n{content}\n```")
     
     async def __cls__(self, channel: discord.TextChannel):
         async for message in channel.history():
@@ -409,7 +415,19 @@ class Server:
             print(f"-- session by {self.bot.user} in {self.guild.name} --")
             #await self.__send__("Starting up...", self.guild.get_channel(CHANNELS["terminal"]), self.guild.get_role(ROLES["everyone"]))
             await self.guild.get_channel(CHANNELS["terminal"]).send("```\nStarting up...\n```")
+            
+            while True:
+                for notification in self.network.notifications:
+                    for channel in self.guild.channels:
+                        if channel.name == notification[0]:
+                            if notification[1] == None:
+                                await self.__send__(notification[2], channel)
+                            else:
+                                await self.__send__(notification[2], channel, self.guild.get_member_named(notification[1]))
+                            break
 
+                self.network.notifications = []
+                await asyncio.sleep(120)
 
         @self.bot.event
         async def on_message(message: discord.Message) -> None:

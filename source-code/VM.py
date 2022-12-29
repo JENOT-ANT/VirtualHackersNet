@@ -32,6 +32,12 @@ VM_HELP: str = """
     
     - >bf <hash> --------------> brutforce hash to find password
   
+    - >time -------------------> display server time
+  
+    - >whois <IP> -------------> display squad and nick of the player with that IP
+
+    - >close ------------------> close external vsh connections to your VM
+  
   ## Files:
     
     - >ls ---------------------> list files of currently logged user
@@ -48,9 +54,6 @@ VM_HELP: str = """
   
     - >proxy ------------------> display your vsh connection path
   
-    - >time -------------------> display server time
-  
-    - >whois <IP> -------------> display squad and nick of the player with that IP
   
 """
 
@@ -102,7 +105,7 @@ class VM:
 
     port_config: dict = None#{software: port}
     logged_in: list = None
-    forward_to: dict = None#{user-form-logged_in: target-address}
+    forward_to: dict[str, tuple] = None#{user-from-logged_in: target-address}
 
 
     def add(self, file_name: str, content: str) -> str:
@@ -141,6 +144,9 @@ class VM:
         return f"Files at {self.nick}({self.ip}):\n{tuple(self.files.keys())}"
 
     def cat(self, filename: str) -> str:
+        if not filename in self.files.keys():
+            return "Error! File not found."
+
         return f"'{filename}' at {self.nick}({self.ip}):\n{self.files[filename]}"
 
     def whoami(self) -> str:
@@ -178,6 +184,17 @@ _______________________________________
     def exit(self, client_ip: str):
         if client_ip != self.nick:
             self.logged_in.remove(client_ip)
+
+    def close(self):
+        counter: int = 0
+
+        for i in range(len(self.logged_in)):
+            if self.logged_in[i] != self.nick:
+                self.logged_in.pop(i)
+                counter += 1
+        
+        return f"{counter} connection(s) closed."
+
 
     #def start(self, cmd: str, file: str=None, line: int=None):
     #    self.processor.append(Process(cmd, file, line))
