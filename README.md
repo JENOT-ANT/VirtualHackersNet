@@ -14,5 +14,5 @@
     > right now the game is in an early stage of developement and the major part of planned features dosen't work.
 _______________________________________________
 ## 🛠 Wanna contribute, maintain game as a mod?
-If you want to become mod, project developer or maintainer just let me know in the `#chat` channel on the Discord server or in `Discussions` tab in this repository.
+If you want to become mod, project developer or maintainer just let me know in the `#chat` channel on the Discord server or in the `Discussions` tab in this repository.
 
