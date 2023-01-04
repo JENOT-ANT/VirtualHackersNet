@@ -1,10 +1,12 @@
 from VM import VM
 
 
-RECRUIT: int = 0
-MASTER: int = 1
-COLEADER: int = 2
-LEADER: int = 3
+RANKS: dict = {
+    "recruit": 0,
+    "master": 1,
+    "coleader": 2,
+    "leader": 3,
+}
 
 
 class Squad:

@@ -8,7 +8,8 @@ import asyncio
 import threading
 from time import asctime, gmtime
 
-from Squad import RECRUIT, MASTER, COLEADER, LEADER
+from Squad import RANKS
+from VM import OS_LIST
 
 
 SERVER_ID: int = 1024343901038985267
@@ -41,7 +42,7 @@ ROLES: dict = {
 SQUAD_NAMES_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-"
 NICKS_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-0134_ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 #PASSWDS_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-OS_LIST: tuple = ("Debian", "Ubuntu", "Parrot", "macOS", "Windows")
+
 
 
 GLOBAL_HELP: str = """
@@ -174,7 +175,7 @@ class Server:
                 squad_channel = channel
                 break
         
-        self.network.squads[squad_name].members[member.display_name] = RECRUIT
+        self.network.squads[squad_name].members[member.display_name] = RANKS["recruit"]
         await member.add_roles(self.guild.get_role(ROLES["Squad-Recruit"]))
         await squad_channel.set_permissions(member, read_messages=True, send_messages=True, add_reactions=True, read_message_history=True)
         
@@ -270,6 +271,7 @@ class Server:
                     return
 
                 self.network.transfer(int(args[1]), args[2])
+                await self.guild.get_channel(CHANNELS["chat"]).send(f"@everyone\n :gift: **{args[2]} has just been gifted {args[1]} CV!**\n\tCongratulations!")
 
         elif args[0] == "join":
             if self.__check_role__(author, ROLES["Squad-Recruit"]) is True or self.__check_role__(author, ROLES["Squad-Master"]) is True or self.__check_role__(author, ROLES["Squad-CoLeader"]) is True or self.__check_role__(author, ROLES["Squad-Leader"]) is True:
@@ -310,7 +312,7 @@ class Server:
         
         
 
-    async def __squad__(self, squad_terminal: discord.TextChannel, author: discord.Member, args: tuple):
+    async def __squad__(self, squad_terminal: discord.TextChannel, author: discord.Member, args: tuple[str, ...]):
         if args[0] == "help":
             await self.__send__(SQUAD_HELP, squad_terminal, author)
         
@@ -346,7 +348,7 @@ class Server:
                 return
 
             # if self.__check_role__(author, ROLES["Squad-Leader"]) is True:
-            self.network.add_vm(author.display_name, args[1], args[2], squad_terminal.name)
+            self.network.add_vm(author.display_name, args[1], OS_LIST.index(args[2]), squad_terminal.name)
             # else:
                 # self.network.add_vm(args[1], args[2], squad_terminal.name, "Recruit")
 
@@ -372,10 +374,17 @@ class Server:
             if self.__check_role__(author, ROLES["Hacker"]) is False:
                 await self.__send__("You are not registered yet... See `help` cmd here.", squad_terminal, author)
                 return
-            if len(args) != 3:
+            if len(args) != 2:
                 await self.__send__("Incorrect amount of arguments. Take a look at '>help' command.", squad_terminal, author)
                 return
-            
+            if args[1].isdigit() is False:
+                await self.__send__("Incorrect arguments' values. Take a look at '>help' command.", squad_terminal, author)
+                return
+
+            if self.network.start_ai(author.display_name, int(args[1])) is True:
+                await self.__send__("Production of the exploit has just started.", squad_terminal, author)
+            else:
+                await self.__send__("You can't choose exploit lvl higher than your AI lvl and lower than 1.", squad_terminal, author)
 
         elif args[0] == ">bf":
             if self.__check_role__(author, ROLES["Hacker"]) is False:

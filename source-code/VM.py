@@ -1,5 +1,11 @@
 from hashlib import md5
 from time import gmtime, asctime
+from random import randint
+
+
+OS_LIST: tuple[str, ...] = ("Penguin", "Parrot", "Racoon", "Turtle", )
+EXPLOITS: tuple[str, ...] = ("kernel", "vsh", )
+
 
 DEFAULT_SOFTWARE: dict = {
     "vtp": 1,
@@ -17,12 +23,22 @@ DEFAULT_PORT_CONFIG: dict = {
 }
 
 DEFAULT_FILES: dict = {
-    "log.sys": "o [--------------] -> VM Created, Welcome!\n",
+    "log.sys": "VM Created, Welcome!\n",
     "shadow.sys": md5("admin".encode('ascii')).hexdigest(),
 }
 
 VM_HELP: str = """
 # Commands:
+  
+  ## Local (can be executed only on your VM):
+    
+    - >bf <hash> --------------> brutforce hash to find password
+
+    - >whois <IP> -------------> display squad and nick of the player with that IP
+    
+    - >time -------------------> display server time
+    
+    - >ai <lvl> ---------------> generate random exploit of the level (lvl <= AI)
 
   ## General:
 
@@ -30,12 +46,6 @@ VM_HELP: str = """
     
     - >panel ------------------> display dashboard with info about the machine
     
-    - >bf <hash> --------------> brutforce hash to find password
-  
-    - >time -------------------> display server time
-  
-    - >whois <IP> -------------> display squad and nick of the player with that IP
-
     - >close ------------------> close external vsh connections to your VM
   
   ## Files:
@@ -53,8 +63,7 @@ VM_HELP: str = """
     - >exit -------------------> close last vsh connection
   
     - >proxy ------------------> display your vsh connection path
-  
-  
+
 """
 
 
@@ -71,13 +80,13 @@ class Process:
     system: bool = None 
     cmds: list[tuple[str]] = None
     pointer: int = None
-    memory: dict[str] = None
+    #memory: dict[str] = None
 
     def __init__(self, cmds: list[tuple[str]], system: bool):
         self.cmds = cmds
         self.system = system
         self.pointer = 0
-        self.memory = []
+        #self.memory = []
         self.indexes = {}
 
     def pop(self) -> tuple[str]:
@@ -93,12 +102,13 @@ class VM:
     nick: str = None
     squad: str = None
     ip: str = None
-    os: str = None
+    os: int = None
     wallet: int = None
     #t_zone: int = None
 
     software: dict = None#{vtp, miner, AI, kernel, vsh, dns}
     files: dict[str, str] = None
+    exploits: list[tuple[int, int, int]] = None # [(category<EXPLOITS>, os<OS_LIST>, success_rate<50-80>)]
 
     network: dict = None
     processor: list[Process] = None
@@ -158,6 +168,8 @@ class VM:
         line1: str = None
         line2: str = None
         line3: str = None
+        bf_state: str = "off"
+        ai_state: str = "off"
         
         if lines_amount >= 1:
             line1 = lines[lines_amount - 1][20:]
@@ -166,14 +178,21 @@ class VM:
         if lines_amount >= 3:
             line3 = lines[lines_amount - 3][20:]
         
+        if "BF.proc" in self.files.keys() and self.files["BF.proc"] != "False":
+            bf_state = "on"
+        if "AI.proc" in self.files.keys() and self.files["AI.proc"] != "False":
+            ai_state = "on"
+
         return f"""
 _______________________________________
 |>{                self.whoami():^35}<|
 |-------------------------------------|
 |{f'{self.wallet} [CV]':<12} {asctime(gmtime()):>24}|
 |=====================================|
-|{f'OS ({self.os}): {self.software["kernel"]}':^18}|{f'Miner: {self.software["miner"]}':^18}|
+|{f'OS ({OS_LIST[self.os]}): {self.software["kernel"]}':^18}|{f'Miner: {self.software["miner"]}':^18}|
 |{f'AI: {self.software["AI"]}':^18}|{f'vsh: {self.software["vsh"]}':^18}|
+|=====================================|
+| {f'BrutForce: {bf_state}':^16} | {f'AI: {ai_state}':^16} |
 |{               'Latest-events':=^37}|
 |{                          line1:^37}|
 |{                          line2:^37}|
@@ -200,7 +219,7 @@ _______________________________________
     #    self.processor.append(Process(cmd, file, line))
 
 
-    def __init__(self, nick: str, squad: str, ip: str, os: str, wallet: int, software: dict, files: dict, port_config: dict):
+    def __init__(self, nick: str, squad: str, ip: str, os: int, wallet: int=0, software: dict={}, files: dict={}, exploits: list=[], port_config: dict={}):
         self.nick = nick
         self.squad = squad
         self.ip = ip
@@ -208,6 +227,7 @@ _______________________________________
         self.wallet = wallet
         self.software = software
         self.files = files
+        self.exploits = exploits
         self.port_config = port_config
         #self.t_zone = t_zone
 
@@ -242,6 +262,7 @@ _______________________________________
             "wallet": self.wallet,
             "software": self.software,
             "files": self.files,
+            "exploits": self.exploits,
             "port_config": self.port_config,
             #"time_zone": self.t_zone,
         }

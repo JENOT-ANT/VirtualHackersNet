@@ -1,13 +1,14 @@
 import shelve
 import random
-from Squad import Squad, RECRUIT, MASTER, COLEADER, LEADER
+from Squad import Squad, RANKS
 from VM import VM, Packet
 from hashlib import md5
 from random import randint, choices
 from time import sleep, time
 
 
-FREQUENCY: int = 0.5
+FREQUENCY: float = 0.5
+AI_TIME: int = 60 * 1
 NOTIFICATION_CHANNEL: str = "terminal"
 MAX_CV: int = int(1e9)
 MAX_CV_HASH: int = 10000
@@ -23,7 +24,7 @@ SYSTEM_PORTS: dict = {
     "mine": 76,
 }
 
-DEFAULT_OS: str = "Debian"
+DEFAULT_OS: int = 0
 
 OFFER_TYPES: dict = {
     "update": 0,
@@ -55,7 +56,7 @@ class Network:
 
     bank: int = None
     offers: list[Offer] = None
-    notifications: list[tuple[str]] = None# [(squad, member, content), ...]
+    notifications: list[tuple[str, str, str]] = None# [(squad, member, content), ...]
     squads: dict[str, Squad] = None
 
     by_ip: dict[str, VM] = None
@@ -294,10 +295,33 @@ class Network:
             if answer.source[0] == SYSTEM_IP and answer.content == "found":
                 vm.add_to_log(f"Found {FOUND_CV_AMOUNT + vm.software['miner']} [CV] by miner.")
     
+    def start_ai(self, nick: str, lvl: int) -> bool:
+        if self.by_nick[nick].software["AI"] < lvl or lvl < 1:
+            return False
+
+        self.by_nick[nick].files["AI.proc"] = f"{int(time())} {lvl}"
+        return True
+
+    def vm_ai(self, vm: VM):
+        start_time: int = None # int(vm.files["AI.proc"].split()[0])
+        lvl: int = None # int(vm.files["AI.proc"].split()[1])
+        
+        if not "AI.proc" in vm.files.keys():
+            return
+        if vm.files["AI.proc"] == "False":
+            return
+
+        start_time = int(vm.files["AI.proc"].split()[0])
+        lvl = int(vm.files["AI.proc"].split()[1])
+
+        if start_time + AI_TIME >= int(time()):
+            print(f"Exploit lvl {lvl} is ready!")
+            #self.notifications.append((vm.squad, vm.nick, ""))
+
     def start_bf(self, nick: str, hashed: str):
         self.by_nick[nick].files["BF.proc"] = f"{hashed} 0"
 
-    def vm_bf(self, vm: VM) -> bool:
+    def vm_bf(self, vm: VM):
         guess: str = ""
         hashed: str = None
         principle = None
@@ -312,6 +336,7 @@ class Network:
         
         if principle > MAX_GUESS:
             vm.add_to_log("Bruteforce failed.")
+            self.notifications.append((vm.squad, vm.nick, "Bruteforce faild."))
             vm.files["BF.proc"] = "False"
             return
         
@@ -326,7 +351,8 @@ class Network:
             vm.files["BF.proc"] = "False"
             vm.add("pass.txt", f"{hashed} => {guess}")
             vm.add_to_log("Bruteforce completed.")
-    
+            self.notifications.append((vm.squad, vm.nick, "Bruteforce completed. Check >cat pass.txt to see the resoult."))
+
     def buy(self, id: int, buyer: str) -> str:
 
         if self.transfer(self.offers[id].price, self.offers[id].seller, buyer) is False:
@@ -347,48 +373,6 @@ class Network:
 
     def __generate_password__(self) -> str:
         return "".join(choices(PASSWDS_ALPHABET, k=PASSWD_LENGHT))
-
-    def __load__(self):
-        port_config: dict = None
-        wallet: int = None
-        os: str = None
-
-        db: shelve.Shelf = shelve.open(self.__db_filename__, "r")
-        
-        for vm in db["vms"]:
-            if "port_config" in vm.keys():
-                port_config = vm["port_config"]
-            else:
-                port_config = {}
-            
-            if "wallet" in vm.keys():
-                wallet = vm["wallet"]
-            else:
-                wallet = 0
-
-            if "os" in vm.keys():
-                os = vm["os"]
-            else:
-                os = DEFAULT_OS
-            
-            self.by_nick[vm["nick"]] = VM(vm["nick"], vm["squad"], vm["ip"], os, wallet, vm["software"], vm["files"], port_config)
-            self.by_ip[vm["ip"]] = self.by_nick[vm["nick"]]
-
-        for squad in db["squads"]:
-            self.squads[squad["name"]] = Squad(squad["name"], squad["members"], squad["recruting"])
-            
-            # for member in self.squads[squad["name"]].members.keys():
-            #     if self.squads[squad["name"]].members[member] == "Squad-Leader" or self.squads[squad["name"]].members[member] == "Leader":
-            #         self.squads[squad["name"]].members[member] = LEADER
-                
-            #     elif self.squads[squad["name"]].members[member] == "Squad-Recruit" or self.squads[squad["name"]].members[member] == "Recruit":
-            #         self.squads[squad["name"]].members[member] = RECRUIT
-
-        if "bank" in db.keys():
-            self.bank = db["bank"]
-
-        db.close()
-
 
     def __init__(self, db_filename: str):
         self.running = True
@@ -432,6 +416,7 @@ class Network:
         while self.running is True:
             for vm in self.by_nick.values():
                 self.vm_bf(vm)
+                self.vm_ai(vm)
                 
                 self.vm_miner(vm)
                 self.sys_mine()
@@ -449,11 +434,11 @@ class Network:
             
             sleep(FREQUENCY)
 
-    def add_vm(self, old_name: str, nick: str, os: str, squad: str):
+    def add_vm(self, old_name: str, nick: str, os: int, squad: str):
         ip: str = self.__generate_ip__()
         #password: str = self.__generate_password__()
         
-        self.by_nick[nick] = VM(nick, squad, ip, os, 0, {}, {}, {})
+        self.by_nick[nick] = VM(nick, squad, ip, os)
         self.by_ip[ip] = self.by_nick[nick]
 
         self.set_passwd(nick)
@@ -463,7 +448,54 @@ class Network:
 
     def add_squad(self, name: str, leader: str):
         self.squads[name] = Squad(name, {}, True)
-        self.squads[name].members[leader] = LEADER
+        self.squads[name].members[leader] = RANKS["leader"]
+
+    def __load__(self):
+        exploits: list = None
+        port_config: dict = None
+        wallet: int = None
+        os: int = None
+
+        db: shelve.Shelf = shelve.open(self.__db_filename__, "r")
+        
+        for vm in db["vms"]:
+            if "exploits" in vm.keys():
+                exploits = vm["exploits"]
+            else:
+                exploits = []
+
+            if "port_config" in vm.keys():
+                port_config = vm["port_config"]
+            else:
+                port_config = {}
+            
+            if "wallet" in vm.keys():
+                wallet = vm["wallet"]
+            else:
+                wallet = 0
+
+            if "os" in vm.keys():
+                os = vm["os"]
+            else:
+                os = DEFAULT_OS
+            
+            self.by_nick[vm["nick"]] = VM(vm["nick"], vm["squad"], vm["ip"], os, wallet, vm["software"], vm["files"], exploits, port_config)
+            self.by_ip[vm["ip"]] = self.by_nick[vm["nick"]]
+
+        for squad in db["squads"]:
+            self.squads[squad["name"]] = Squad(squad["name"], squad["members"], squad["recruting"])
+            
+            # for member in self.squads[squad["name"]].members.keys():
+            #     if self.squads[squad["name"]].members[member] == "Squad-Leader" or self.squads[squad["name"]].members[member] == "Leader":
+            #         self.squads[squad["name"]].members[member] = LEADER
+                
+            #     elif self.squads[squad["name"]].members[member] == "Squad-Recruit" or self.squads[squad["name"]].members[member] == "Recruit":
+            #         self.squads[squad["name"]].members[member] = RECRUIT
+
+        if "bank" in db.keys():
+            self.bank = db["bank"]
+
+        db.close()
 
     def save(self):
         db: shelve.Shelf = None
