@@ -1,11 +1,11 @@
 import shelve
 import random
 from Squad import Squad, RANKS
-from VM import VM, Packet
+from VM import VM, Packet, OS_LIST, EXPLOITS, Exploit#, EXPLOIT
 from hashlib import md5
 from random import randint, choices
 from time import sleep, time
-
+from uuid import uuid4, UUID
 
 FREQUENCY: float = 0.5
 AI_TIME: int = 60 * 1
@@ -32,6 +32,11 @@ OFFER_TYPES: dict = {
     "ip_list": 2,
 }
 
+def chance(success: int) -> bool:
+    if randint(1, 100) <= success:
+        return True
+    else:
+        return False
 
 class Offer:
 
@@ -101,16 +106,85 @@ class Network:
         if len(args) == 2 and args[1] in self.by_nick.keys() and args[0] == self.__cv_hash__:
             print(f"Found by {args[1]}")
 
-            self.notifications.append((NOTIFICATION_CHANNEL, None, f"{args[1]} has just found CV hash."))
+            self.notifications.append((NOTIFICATION_CHANNEL, None, f"The CV hash has been found by {args[1]}."))
             
             if self.transfer(FOUND_CV_AMOUNT + self.by_nick[args[1]].software["miner"], args[1]) is True:
                 self.send((self.by_nick[args[1]].ip, 7676), (SYSTEM_IP, SYSTEM_PORTS["mine"]), "found")
             
             self.__cv_hash__ = str(randint(0, MAX_CV_HASH))
 
-    #def start_bf(self, hash: str, user: str) -> bool:
+
+    def exploit(self, vm: VM, packet_source_ip: str, target_ip: str, target_port: int, exploit_id: int, attacker_nick: str=None, secret: str=None):
+        attacker: VM = None
+        answer: str = None
+
+        if not target_ip in self.by_ip.keys():
+            return "Exploit failed! Target not found."
         
+        if attacker_nick == None:
+            attacker_nick = vm.nick
         
+        if not attacker_nick in self.by_nick.keys():
+            return "Error! Exploit not found."
+            
+        attacker = self.by_nick[attacker_nick]
+
+        if not target_ip in self.by_ip.keys():
+            return "Error! Target not found."
+
+        if exploit_id >= len(attacker.exploits):
+            return "Error! Exploit not found."
+
+        if secret == None:
+            secret = str(attacker.exploits[exploit_id].secret)
+
+        self.send((target_ip, target_port), (vm.ip, 2222), f"exploit {exploit_id} {attacker_nick} {secret}")
+        self.vsh(self.by_ip[target_ip])
+
+        answer = self.recv(2222, vm).content
+        
+        if answer == "accept":
+            vm.forward_to[packet_source_ip] = (target_ip, self.by_ip[target_ip].port_config["vsh"])
+            
+            return f"Connected to {self.by_ip[target_ip].nick}({target_ip})"
+
+        return answer
+
+    def handle_exploit(self, vm: VM, exploit_id: int, attacker_nick: str, secret: str) -> str:
+        attacker: VM = None
+        category: str = None
+
+        if not attacker_nick in self.by_nick.keys():
+            return "args"
+        
+        attacker = self.by_nick[attacker_nick]
+
+        if exploit_id >= len(attacker.exploits):
+            return "id"
+
+        if str(attacker.exploits[exploit_id].secret) != secret:
+            return "secret"
+
+        if attacker.exploits[exploit_id].os != vm.os:
+            return "no response"
+        
+        if EXPLOITS[attacker.exploits[exploit_id].category] == "vsh":
+            if attacker.exploits[exploit_id].lvl < vm.software["vsh"]:
+                return "failed"
+            
+            category = "vsh"
+
+        else:
+            if attacker.exploits[exploit_id].lvl < vm.software["kernel"]:
+                return "failed"
+
+            category = "kernel"
+
+        if chance(attacker.exploits[exploit_id].success_rate) is True:
+            return category
+        else:
+            return "failed"
+
     def vsh(self, vm: VM) -> str:
         packet: Packet = None
         answer: Packet = None
@@ -120,12 +194,22 @@ class Network:
 
         packet = self.recv(vm.port_config["vsh"], vm)
         
+        if packet == None:
+            return "Error! Connection refused."
+        
         args = packet.content.split()
+
+        #print(vm.logged_in)
+        #print(vm.forward_to)
 
         if packet.source[0] in vm.logged_in:
             if packet.source[0] in vm.forward_to.keys():
                 target = self.by_ip[vm.forward_to[packet.source[0]][0]]
-                self.send((target.ip, vm.forward_to[packet.source[0]][1]), (vm.ip, 2222), packet.content)
+                
+                if args[0] == ">exploit" and packet.source[0] == vm.nick:
+                    self.send((target.ip, vm.forward_to[packet.source[0]][1]), (vm.ip, 2222), f"{packet.content} {vm.nick} {vm.exploits[int(args[3])].secret}")
+                else:
+                    self.send((target.ip, vm.forward_to[packet.source[0]][1]), (vm.ip, 2222), packet.content)
                 
                 self.vsh(target)
                 answer = self.recv(2222, vm)
@@ -181,6 +265,29 @@ class Network:
 
             elif args[0] == ">panel":
                 iosout = vm.dashboard()
+                self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return iosout
+
+            elif args[0] == ">exploit":
+                #print(args)
+                #print(f"{packet.source[0]} {vm.nick}")
+
+                if (packet.source[0] != vm.nick and len(args) != 6) or (packet.source[0] == vm.nick and len(args) != 4):
+                    iosout =  "Error! Incorrect amount of arguments. Check '>help' command."
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+                
+                if args[2].isnumeric() is False or args[3].isnumeric() is False:
+                    iosout =  "Error! Incorrect values of the arguments. Check '>help' command."
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+                
+                if packet.source[0] != vm.nick:
+                    iosout = self.exploit(vm, packet.source[0], args[1], int(args[2]), int(args[3]), args[4], args[5])
+                
+                else:
+                    iosout = self.exploit(vm, packet.source[0], args[1], int(args[2]), int(args[3]))
+
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
 
@@ -278,12 +385,34 @@ class Network:
                 vm.logged_in.append(packet.source[0])
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
+            
+            if args[0] == "exploit":
+                
+                #"exploit <id> <nick> <secret>"
+                print(args)
 
+                if len(args) != 4 or args[1].isdigit() is False:
+                    iosout = "args"
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+
+                iosout = self.handle_exploit(vm, int(args[1]), args[2], args[3])
+                
+                if iosout == "vsh":
+                    iosout = vm.cat("shadow.sys")
+                elif iosout == "kernel":
+                    iosout = f"accept"
+                    vm.logged_in.append(packet.source[0])
+                
+                self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return iosout
+                
             else:
                 iosout = "access denied"
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
     
+
     def vm_miner(self, vm: VM):
         answer: Packet = None
         
@@ -296,7 +425,7 @@ class Network:
                 vm.add_to_log(f"Found {FOUND_CV_AMOUNT + vm.software['miner']} [CV] by miner.")
     
     def start_ai(self, nick: str, lvl: int) -> bool:
-        if self.by_nick[nick].software["AI"] < lvl or lvl < 1:
+        if self.by_nick[nick].software["AI"] < lvl or lvl < 1 or len(self.by_nick[nick].exploits) >= 20:
             return False
 
         self.by_nick[nick].files["AI.proc"] = f"{int(time())} {lvl}"
@@ -314,12 +443,18 @@ class Network:
         start_time = int(vm.files["AI.proc"].split()[0])
         lvl = int(vm.files["AI.proc"].split()[1])
 
-        if start_time + AI_TIME >= int(time()):
-            print(f"Exploit lvl {lvl} is ready!")
-            #self.notifications.append((vm.squad, vm.nick, ""))
+        if start_time + AI_TIME <= int(time()):
+            # produce a random exploit (take a look at VM.exploits for a template)
+            vm.exploits.append(Exploit(randint(0, len(EXPLOITS) - 1), lvl, randint(0, len(OS_LIST) - 1), randint(50, 100), uuid4()))
+            
+            vm.files["AI.proc"] = "False"
+            
+            print(f"Exploit found by {vm.nick}!")
+            self.notifications.append((vm.squad, vm.nick, "Exploit found."))
 
-    def start_bf(self, nick: str, hashed: str):
+    def start_bf(self, nick: str, hashed: str) -> str:
         self.by_nick[nick].files["BF.proc"] = f"{hashed} 0"
+        return "Started brutforce on the hash."
 
     def vm_bf(self, vm: VM):
         guess: str = ""
@@ -403,8 +538,14 @@ class Network:
 
     def recv(self, port: int, vm: VM=None) -> Packet:
         if vm != None:
+            if not port in vm.network.keys():
+                return None
+            
             return vm.network.pop(port)
         else:
+            if not port in self.system_network.keys():
+                return None
+
             return self.system_network.pop(port)
 
     def set_passwd(self, nick: str):
@@ -459,6 +600,7 @@ class Network:
         db: shelve.Shelf = shelve.open(self.__db_filename__, "r")
         
         for vm in db["vms"]:
+            
             if "exploits" in vm.keys():
                 exploits = vm["exploits"]
             else:

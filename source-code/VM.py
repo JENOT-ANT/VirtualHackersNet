@@ -1,11 +1,14 @@
 from hashlib import md5
 from time import gmtime, asctime
 from random import randint
+from uuid import uuid4, UUID
 
 
 OS_LIST: tuple[str, ...] = ("Penguin", "Parrot", "Racoon", "Turtle", )
 EXPLOITS: tuple[str, ...] = ("kernel", "vsh", )
-
+# EXPLOIT: dict = {
+#     "secret": 4,
+# }
 
 DEFAULT_SOFTWARE: dict = {
     "vtp": 1,
@@ -32,13 +35,15 @@ VM_HELP: str = """
   
   ## Local (can be executed only on your VM):
     
-    - >bf <hash> --------------> brutforce hash to find password
+    - $bf <hash> --------------> brutforce hash to find password
 
-    - >whois <IP> -------------> display squad and nick of the player with that IP
+    - $whois <IP> -------------> display squad and nick of the player with that IP
     
-    - >time -------------------> display server time
+    - $time -------------------> display server time
     
-    - >ai <lvl> ---------------> generate random exploit of the level (lvl <= AI)
+    - $ai <lvl> ---------------> generate random exploit of the level (lvl <= AI)
+
+    - $archives ---------------> list owned exploits
 
   ## General:
 
@@ -49,12 +54,14 @@ VM_HELP: str = """
     - >close ------------------> close external vsh connections to your VM
   
   ## Files:
-    
+
     - >ls ---------------------> list files of currently logged user
     
     - >cat <filename> ---------> display content of the file
   
   ## VSH:
+
+    - >exploit <IP><port><ID> -> run the exploit (with ID, check $archives first)
     
     - >vsh <IP><port><passwd> -> connect to IP's VM (Virtual Machine)
 
@@ -97,6 +104,21 @@ class Process:
         
         return cmd
 
+
+class Exploit:
+    category: int = None
+    lvl: int = None
+    os: int = None
+    success_rate: int = None
+    secret: UUID = None
+
+    def __init__(self, category: int, lvl: int, os: int, success_rate: int, secret: UUID):
+        self.category = category
+        self.lvl = lvl
+        self.os = os
+        self.success_rate = success_rate
+        self.secret = secret
+    
 class VM:
     '''class that represents single virtual machine'''
     nick: str = None
@@ -108,7 +130,7 @@ class VM:
 
     software: dict = None#{vtp, miner, AI, kernel, vsh, dns}
     files: dict[str, str] = None
-    exploits: list[tuple[int, int, int]] = None # [(category<EXPLOITS>, os<OS_LIST>, success_rate<50-80>)]
+    exploits: list[Exploit] = None#list[tuple[int, int, int, int, int]] = None # [(category<EXPLOITS>, lvl, os<OS_LIST>, success_rate<50-80>, secret<0-100>[to prevent unpriviliged useage])]
 
     network: dict = None
     processor: list[Process] = None
@@ -151,7 +173,16 @@ class VM:
         return VM_HELP
     
     def ls(self) -> str:
-        return f"Files at {self.nick}({self.ip}):\n{tuple(self.files.keys())}"
+        # files: str = '\n'.join(list(self.files.keys()))
+        files: str = ""
+
+        for filename in self.files.keys():
+            if filename.endswith(".proc"):
+                continue
+            
+            files += f"\t{filename}\n"
+
+        return f"Files at {self.nick}({self.ip}):\n{files}"
 
     def cat(self, filename: str) -> str:
         if not filename in self.files.keys():
@@ -162,6 +193,15 @@ class VM:
     def whoami(self) -> str:
         return f"{self.nick} {self.ip}"
     
+    def archives(self) -> str:
+        output: str = " ID |   TYPE   | LVL |    OS    | SUCCESS\n=========================================\n"
+
+        for i in range(0, len(self.exploits)):
+            # output += f"{i:^4}|{EXPLOITS[self.exploits[i][0]]:^10}|{self.exploits[i][1]:^5}|{OS_LIST[self.exploits[i][2]]:^10}|{f'{self.exploits[i][3]} %':^10}\n"
+            output += f"{i:^4}|{EXPLOITS[self.exploits[i].category]:^10}|{self.exploits[i].lvl:^5}|{OS_LIST[self.exploits[i].os]:^10}|{f'{self.exploits[i].success_rate} %':^10}\n"
+
+        return output
+
     def dashboard(self) -> str:
         lines: list = self.files["log.sys"].splitlines()
         lines_amount: int = len(lines)

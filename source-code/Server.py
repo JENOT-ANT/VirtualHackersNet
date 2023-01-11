@@ -7,6 +7,7 @@ from Network import Network
 import asyncio
 import threading
 from time import asctime, gmtime
+from datetime import timedelta
 
 from Squad import RANKS
 from VM import OS_LIST
@@ -38,11 +39,12 @@ ROLES: dict = {
     "Squad-Recruit": 1030572112068485212,
 }
 
+DEFAULT_TIMEOUT: int = 60 * 10
 
 SQUAD_NAMES_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-"
 NICKS_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-0134_ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 #PASSWDS_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
+HISTORY_LIMIT: int = 15
 
 
 GLOBAL_HELP: str = """
@@ -72,6 +74,12 @@ GLOBAL_HELP: str = """
     - !save --------------> save game's data to a database
     
     - !close -------------> stop game's bot
+  
+  
+  ## Mod commands (WORK ON ANY CHANNEL):
+    
+    - !void [nick, ...] --> timout player(s), clear chat
+
 """
 
 SQUAD_HELP: str = f"""
@@ -122,6 +130,7 @@ HACK_THE_PLANET = r"""
                 \ / \   / \ /
                  \___\_/___/
 """
+
 
 class Server:
 
@@ -205,7 +214,7 @@ class Server:
         return False
 
 
-    async def __vsh__(self, args: list, squad_terminal: discord.TextChannel, author: discord.Member):
+    async def __vsh__(self, args: tuple[str, ...], squad_terminal: discord.TextChannel, author: discord.Member):
         ip: str = None
         port: int = None
         message: str = ""
@@ -222,13 +231,15 @@ class Server:
 
     async def __send__(self, content: str, channel: discord.TextChannel, user: discord.Member=None):
         if user == None:
-            await channel.send(f"```q\n{content}\n```")
+            await channel.send(f"```py\n{content}\n```")
         else:
-            await channel.send(f"{user.mention}\n```q\n{content}\n```")
+            await channel.send(f"{user.mention}\n```py\n{content}\n```")
     
-    async def __cls__(self, channel: discord.TextChannel):
+    async def __cls__(self, channel: discord.TextChannel, author: discord.Member=None):
         async for message in channel.history():
-            await message.delete()
+            if author == None or message.author == author:
+                await message.delete()
+            
             await asyncio.sleep(0.7)
 
     async def __terminal__(self, terminal: discord.TextChannel, author: discord.Member, args: tuple) -> None:
@@ -278,7 +289,7 @@ class Server:
                 await self.__send__("Your current squad needs you :)", terminal, author)
                 return
             if len(args) != 2:
-                await self.__send__("Incorrect amount of arguments. Take a look at 'help' command.")
+                await self.__send__("Incorrect amount of arguments. Take a look at 'help' command.", terminal, author)
                 return
             if not args[1] in self.network.squads.keys():
                 await self.__send__("Squad not found :(", terminal, author)
@@ -356,10 +367,10 @@ class Server:
             await author.edit(nick=args[1])
             await self.__send__("Welcome hacker! Now you can log in and play.", squad_terminal, author)
         
-        elif args[0] == ">time" or args[0] == "time":
+        elif args[0] == "$time" or args[0] == "time":
             await self.__send__(f"It's <{asctime(gmtime())}> in the game.", squad_terminal, author)
 
-        elif args[0] == ">whois":
+        elif args[0] == "$whois":
             if len(args) != 2:
                 await self.__send__("Incorrect amount of arguments. Take a look at '>help' command.", squad_terminal, author)
                 return
@@ -370,7 +381,7 @@ class Server:
             
             await self.__send__(f"{args[1]}:\n\tnick: {self.network.by_ip[args[1]].nick}\n\tsquad: {self.network.by_ip[args[1]].squad}", squad_terminal, author)
 
-        elif args[0] == ">ai":
+        elif args[0] == "$ai":
             if self.__check_role__(author, ROLES["Hacker"]) is False:
                 await self.__send__("You are not registered yet... See `help` cmd here.", squad_terminal, author)
                 return
@@ -384,9 +395,9 @@ class Server:
             if self.network.start_ai(author.display_name, int(args[1])) is True:
                 await self.__send__("Production of the exploit has just started.", squad_terminal, author)
             else:
-                await self.__send__("You can't choose exploit lvl higher than your AI lvl and lower than 1.", squad_terminal, author)
+                await self.__send__("Incorrect lvl (maximum is the lvl of your AI) or max amount of exploits (20) reached!", squad_terminal, author)
 
-        elif args[0] == ">bf":
+        elif args[0] == "$bf":
             if self.__check_role__(author, ROLES["Hacker"]) is False:
                 await self.__send__("You are not registered yet... See `help` cmd here.", squad_terminal, author)
                 return
@@ -394,9 +405,29 @@ class Server:
                 await self.__send__("Incorrect amount of arguments. Take a look at '>help' command.", squad_terminal, author)
                 return
             
-            self.network.start_bf(author.display_name, args[1])
+            await self.__send__(self.network.start_bf(author.display_name, args[1]), squad_terminal, author)
+
+        elif args[0] == "$archives":
+            if self.__check_role__(author, ROLES["Hacker"]) is False:
+                await self.__send__("You are not registered yet... See `help` cmd here.", squad_terminal, author)
+                return
+
+            await self.__send__(self.network.by_nick[author.display_name].archives(), squad_terminal, author)
+
+        # elif args[0] == ">run":
+        #     if self.__check_role__(author, ROLES["Hacker"]) is False:
+        #         await self.__send__("You are not registered yet... See `help` cmd here.", squad_terminal, author)
+        #         return
+
+        #     if len(args) != 4:
+        #         await self.__send__("Incorrect amount of arguments. Take a look at '>help' command.", squad_terminal, author)
+        #         return
             
-            await self.__send__("Started brutforce on the hash.", squad_terminal, author)
+        #     if args[2].isdigit() is False or args[3].isdigit() is False:
+        #         await self.__send__("Incorrect arguments' values. Take a look at '>help' command.", squad_terminal, author)
+        #         return
+            
+        #     await self.__send__(self.network.exploit(args[1], int(args[2]), int(args[3]), author.display_name), squad_terminal, author)
 
         elif args[0][0] == ">":
             if self.__check_role__(author, ROLES["Hacker"]) is False:
@@ -405,6 +436,14 @@ class Server:
             
             await self.__vsh__(args, squad_terminal, author)
 
+    async def __void__(self, nick: str, channel: discord.TextChannel, author: discord.Member):
+        member: discord.Member = self.guild.get_member_named(nick)
+
+        if member != None:
+            await member.timeout(timedelta(seconds=DEFAULT_TIMEOUT))
+            await self.__cls__(channel, member)
+        else:
+            await self.__send__(f"Member '{nick}' not found.", channel, author)
 
     def __init__(self, db_filename: str):
         self.network = Network(db_filename)
@@ -436,7 +475,7 @@ class Server:
                             break
 
                 self.network.notifications = []
-                await asyncio.sleep(120)
+                await asyncio.sleep(60)
 
         @self.bot.event
         async def on_message(message: discord.Message) -> None:
@@ -444,24 +483,45 @@ class Server:
             author: discord.Member = None
             channel: discord.TextChannel = None
             args: list = None
-            
+            history: list[discord.Message] = None
+
             author = message.author
             channel = self.guild.get_channel(message.channel.id)#self.bot.get_channel(message.channel.id)
+            
             
             if author == self.bot.user:
                 return
             
+            args = message.content.split()
+            
+            if args[0] == "!void" and (self.__check_role__(author, ROLES["Mod"]) or self.__check_role__(author, ROLES["Admin"])):
+                if len(args) == 1:
+                    await self.__cls__(channel)
+                    return
+
+                for nick in args[1:]:
+                    await self.__void__(nick, channel, author)
+                        
             if channel.category_id == CATEGORIES["GLOBAL"] and channel.id != CHANNELS["terminal"]:
                 return
-            
-            
-            args = message.content.split()
 
             if channel.category_id == CATEGORIES["SQUADS"]:
+                history = [message async for message in channel.history(limit=HISTORY_LIMIT + 5)]
+
+                if len(history) > HISTORY_LIMIT:
+                    await channel.delete_messages(history[HISTORY_LIMIT:])
+                    # await history[20:][0].delete()
+                
                 print(args)
                 await self.__squad__(channel, author, args)
 
             elif channel.id == CHANNELS["terminal"]:
+                history = [message async for message in channel.history(limit=HISTORY_LIMIT + 5)]
+
+                if len(history) > HISTORY_LIMIT:
+                    await channel.delete_messages(history[HISTORY_LIMIT:])
+                    # await history[20:][0].delete()
+
                 print(args)
                 await self.__terminal__(channel, author, args)
 
