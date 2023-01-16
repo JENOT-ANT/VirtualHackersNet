@@ -134,3 +134,4 @@ dmypy.json
 *.dat
 *.dir
 .vscode/settings.json
+scripts/db-edit.py
