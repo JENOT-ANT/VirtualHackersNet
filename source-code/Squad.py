@@ -8,6 +8,8 @@ RANKS: dict = {
     "leader": 3,
 }
 
+INT_TO_RANK: tuple = ("Squad-Recruit", "Squad-Master", "Squad-CoLeader", "Squad-Leader",)
+
 
 class Squad:
     name: str = None

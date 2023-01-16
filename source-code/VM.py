@@ -10,6 +10,15 @@ EXPLOITS: tuple[str, ...] = ("kernel", "vsh", )
 #     "secret": 4,
 # }
 
+MAX_SOFTWARE: dict = {
+    "vtp": 100,
+    "miner": 26,
+    "AI": 100,
+    "kernel": 100,
+    "vsh": 100,
+    "dns": 1,
+}
+
 DEFAULT_SOFTWARE: dict = {
     "vtp": 1,
     "miner": 1,
@@ -28,6 +37,7 @@ DEFAULT_PORT_CONFIG: dict = {
 DEFAULT_FILES: dict = {
     "log.sys": "VM Created, Welcome!\n",
     "shadow.sys": md5("admin".encode('ascii')).hexdigest(),
+    "network.dump": "-- Network Traffic --",
 }
 
 VM_HELP: str = """
@@ -43,19 +53,21 @@ VM_HELP: str = """
     
     - $ai <lvl> ---------------> generate random exploit of the level (lvl <= AI)
 
-    - $archives ---------------> list owned exploits
+    - $archives ---------------> [🗃] list owned exploits
 
   ## General:
 
-    - >help -------------------> display this commands' help message
+    - >help -------------------> [❔] display this commands' help message
     
-    - >panel ------------------> display dashboard with info about the machine
+    - >panel ------------------> [📟] display dashboard with info about the machine
     
-    - >close ------------------> close external vsh connections to your VM
+    - >transfer <nick><value> -> transfer <value> of CV to the VM of the <nick> player
+
+    - >close ------------------> [🛡] close external vsh connections to your VM
   
   ## Files:
 
-    - >ls ---------------------> list files of currently logged user
+    - >ls ---------------------> [📁] list files of currently logged user
     
     - >cat <filename> ---------> display content of the file
   
@@ -72,6 +84,8 @@ VM_HELP: str = """
     - >proxy ------------------> display your vsh connection path
 
 """
+
+MAX_FILE_SIZE: int = 20
 
 
 class Packet:
@@ -140,12 +154,17 @@ class VM:
     forward_to: dict[str, tuple] = None#{user-from-logged_in: target-address}
 
 
-    def add(self, file_name: str, content: str) -> str:
+    def add(self, file_name: str, content: str, overwrite: bool=False) -> str:
+        lines_amount: int = self.files[file_name].count('\n') + 2
 
         if file_name in self.files.keys():
-            if (self.files[file_name].count('\n') + 1) < 20:
+            if lines_amount <= MAX_FILE_SIZE:
                 self.files[file_name] += f"\n{content}"
             else:
+                if overwrite is True:
+                    self.files[file_name] += f"\n{content}"
+                    self.files[file_name] = '\n'.join(self.files[file_name].splitlines()[lines_amount - MAX_FILE_SIZE:])
+
                 return "Failed to add! Max file size reached."
         else:
             self.files[file_name] = content
@@ -153,13 +172,15 @@ class VM:
         return "File has been updated."
     
     def add_to_log(self, content: str):
-        lines_amount: int = self.files["log.sys"].count("\n") + 1
+        self.add("log.sys", f"o [{gmtime().tm_mon:0>2}/{gmtime().tm_mday:0>2}; {gmtime().tm_hour:0>2}:{gmtime().tm_min:0>2}] -> {content}", True)
         
-        self.files["log.sys"] += f"\no [{gmtime().tm_mon:0>2}/{gmtime().tm_mday:0>2}; {gmtime().tm_hour:0>2}:{gmtime().tm_min:0>2}] -> {content}"
+        #lines_amount: int = self.files["log.sys"].count('\n') + 2
         
-        if lines_amount > 20:
-            self.files["log.sys"] = "\n".join(self.files["log.sys"].splitlines()[lines_amount - 20:])
-            
+        # self.files["log.sys"] += f"\no [{gmtime().tm_mon:0>2}/{gmtime().tm_mday:0>2}; {gmtime().tm_hour:0>2}:{gmtime().tm_min:0>2}] -> {content}"
+
+        # if lines_amount > 20:
+        #     self.files["log.sys"] = "\n".join(self.files["log.sys"].splitlines()[lines_amount - 20:])
+
     def start(self, code: str, by_system=False):
         cmds: list[tuple[str]] = []
 
@@ -233,7 +254,7 @@ _______________________________________
 |{f'AI: {self.software["AI"]}':^18}|{f'vsh: {self.software["vsh"]}':^18}|
 |=====================================|
 | {f'BrutForce: {bf_state}':^16} | {f'AI: {ai_state}':^16} |
-|{               'Latest-events':=^37}|
+|{               'Latest-Events':=^37}|
 |{                          line1:^37}|
 |{                          line2:^37}|
 |{                          line3:^37}|

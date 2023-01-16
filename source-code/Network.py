@@ -1,7 +1,7 @@
 import shelve
 import random
 from Squad import Squad, RANKS
-from VM import VM, Packet, OS_LIST, EXPLOITS, Exploit#, EXPLOIT
+from VM import VM, Packet, OS_LIST, EXPLOITS, Exploit, MAX_SOFTWARE#, EXPLOIT
 from hashlib import md5
 from random import randint, choices
 from time import sleep, time
@@ -135,6 +135,12 @@ class Network:
         if exploit_id >= len(attacker.exploits):
             return "Error! Exploit not found."
 
+        if target_port != self.by_ip[target_ip].port_config["vsh"]:
+            if target_port in self.by_ip[target_ip].port_config.values():
+                return "Error! Address responded with different protocol."
+            
+            return "Target didn't respond."
+
         if secret == None:
             secret = str(attacker.exploits[exploit_id].secret)
 
@@ -147,6 +153,12 @@ class Network:
             vm.forward_to[packet_source_ip] = (target_ip, self.by_ip[target_ip].port_config["vsh"])
             
             return f"Connected to {self.by_ip[target_ip].nick}({target_ip})"
+        
+        elif answer == "no response":
+            return "Target didn't respond."
+
+        elif answer == "failed":
+            return "Error! Exploit failed."
 
         return answer
 
@@ -255,6 +267,35 @@ class Network:
                     return iosout
 
                 iosout = vm.cat(args[1])
+                self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return iosout
+
+            elif args[0] == ">transfer":
+                if len(args) != 3:
+                    iosout =  "Error! Incorrect amount of arguments. Check '>help' command."
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+                
+                if args[2].isdigit() is False:
+                    iosout =  "Error! Incorrect values of the arguments. Check '>help' command."
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+
+                if not args[1] in self.by_nick.keys():
+                    iosout = "Error! Target VM not found."
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+
+                if int(args[2]) > vm.wallet - (50 * vm.software["kernel"]):
+                    iosout = f"Error! Max transefr value: {vm.wallet - (50 * vm.software['kernel'])} [CV]"
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+                
+                self.transfer(int(args[2]), args[1], vm.nick)
+                vm.add_to_log(f"Transfered {int(args[2])} CV to {args[1]}.")
+                self.by_nick[args[1]].add_to_log(f"Transaction: {int(args[2])} CV from {vm.nick}")
+
+                iosout = f"Transfered {int(args[2])} [CV] to {args[1]}."
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
 
@@ -373,7 +414,7 @@ class Network:
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                     return iosout
                 if md5(args[1].encode('ascii')).hexdigest() != vm.files["shadow.sys"]:
-                    vm.add_to_log(f"Connection failed from {packet.source[0]}")
+                    vm.add_to_log(f"Connection failed from {packet.source[0]}.")
                     
                     iosout = "credentials"
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
@@ -494,8 +535,12 @@ class Network:
             return "Purchase failed."
         else:
             if self.offers[id].type == OFFER_TYPES["update"]:
+                if self.by_nick[buyer].software[self.offers[id].content] >= MAX_SOFTWARE[self.offers[id].content]:
+                    return "Purchase failed! Max lvl reached."
+                
                 self.by_nick[buyer].software[self.offers[id].content] += 1
-            
+
+
             return f"{buyer} has just bought #{id} from exchange."
 
     def __generate_ip__(self) -> str:
@@ -530,9 +575,13 @@ class Network:
         self.__load__()
 
     def send(self, destination: tuple, source: tuple, content: str) -> None:
+        new_line_char: str = '\n'
+        replacement: str = " \\n "
+
         if destination[0] in self.by_ip.keys():
             self.by_ip[destination[0]].network[destination[1]] = Packet(source, content)
-        
+            self.by_ip[destination[0]].add("network.dump", f"{str(source):<24} | {content.replace(new_line_char, replacement)}", True)
+
         elif destination[0] == SYSTEM_IP:
             self.system_network[destination[1]] = Packet(source, content)
 
@@ -550,6 +599,36 @@ class Network:
 
     def set_passwd(self, nick: str):
         self.by_nick[nick].files["shadow.sys"] = md5(self.__generate_password__().encode('ascii')).hexdigest()
+
+    def change_nick(self, current_nick: str, new_nick: str) -> bool:
+        squad_name: str = None
+        ip: str = None
+
+        if not current_nick in self.by_nick.keys():
+            return False
+        
+        if new_nick in self.by_nick.keys():
+            return False
+        
+        self.by_nick[new_nick] = self.by_nick.pop(current_nick)
+
+        self.by_nick[new_nick].nick = new_nick
+        self.by_nick[new_nick].logged_in = [new_nick, ]
+        self.by_nick[new_nick].files["miner.config"] = new_nick
+        self.by_nick[new_nick].forward_to = {}
+
+        ip = self.by_nick[new_nick].ip
+        self.by_ip[ip] = self.by_nick[new_nick]
+
+        squad_name = self.by_nick[new_nick].squad
+        
+        if squad_name == None:
+            return True
+
+        self.squads[squad_name].members[new_nick] = self.squads[squad_name].members.pop(current_nick)
+
+        return True
+
 
     def cpu_loop(self):
         # cmd: tuple = None
