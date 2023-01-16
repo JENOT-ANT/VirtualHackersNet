@@ -53,6 +53,9 @@ class TicTacToe:
 
         # rows and columns:
         for i in range(0, self.size):
+            counter_x = 0
+            counter_y = 0
+            
             for j in range(0, self.size):
                 if self.field[i][j] == TTT['EMPTY']:
                     empty += 1
