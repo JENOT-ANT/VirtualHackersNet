@@ -1,14 +1,14 @@
 import shelve
 import random
 from Squad import Squad, RANKS
-from VM import VM, Packet, OS_LIST, EXPLOITS, Exploit, MAX_SOFTWARE#, EXPLOIT
+from VM import VM, Packet, OS_LIST, EXPLOITS, Exploit, MAX_SOFTWARE, Process
 from hashlib import md5
 from random import randint, choices
 from time import sleep, time
 from uuid import uuid4, UUID
 
 FREQUENCY: float = 0.5
-AI_TIME: int = 60 * 1
+AI_TIME: int = 60 * 30
 NOTIFICATION_CHANNEL: str = "terminal"
 MAX_CV: int = int(1e9)
 MAX_CV_HASH: int = 10000
@@ -25,6 +25,8 @@ SYSTEM_PORTS: dict = {
 }
 
 DEFAULT_OS: int = 0
+FILENAME_LIMIT: int = 14
+
 
 OFFER_TYPES: dict = {
     "update": 0,
@@ -144,7 +146,7 @@ class Network:
         if secret == None:
             secret = str(attacker.exploits[exploit_id].secret)
 
-        self.send((target_ip, target_port), (vm.ip, 2222), f"exploit {exploit_id} {attacker_nick} {secret}")
+        self.send((target_ip, target_port), (vm.ip, 2222), f"expl {exploit_id} {attacker_nick} {secret}")
         self.vsh(self.by_ip[target_ip])
 
         answer = self.recv(2222, vm).content
@@ -218,7 +220,7 @@ class Network:
             if packet.source[0] in vm.forward_to.keys():
                 target = self.by_ip[vm.forward_to[packet.source[0]][0]]
                 
-                if args[0] == ">exploit" and packet.source[0] == vm.nick:
+                if args[0] == "exploit" and packet.source[0] == vm.nick:
                     self.send((target.ip, vm.forward_to[packet.source[0]][1]), (vm.ip, 2222), f"{packet.content} {vm.nick} {vm.exploits[int(args[3])].secret}")
                 else:
                     self.send((target.ip, vm.forward_to[packet.source[0]][1]), (vm.ip, 2222), packet.content)
@@ -247,22 +249,25 @@ class Network:
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
 
-            if args[0] == ">help":
+            elif args[0] == "help":
                 iosout = vm.help()
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
-            # elif args[0] == ">pass":
-            #     self.by_nick[args[1]].files["shadow.sys"] = md5(args[2].encode('ascii')).hexdigest()
-            #     return 'Password changed...'
             
-            elif args[0] == ">ls":
+            elif args[0] == "passwd":
+                self.set_passwd(vm.nick)
+                iosout = "Password has been changed."
+                self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return iosout
+
+            elif args[0] == "ls":
                 iosout = vm.ls()
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
 
-            elif args[0] == ">cat":
+            elif args[0] == "cat":
                 if len(args) != 2:
-                    iosout =  "Error! Incorrect amount of arguments. Check '>help' command."
+                    iosout =  "Error! Incorrect amount of arguments. Check '> help' command."
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                     return iosout
 
@@ -270,14 +275,14 @@ class Network:
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
 
-            elif args[0] == ">transfer":
+            elif args[0] == "transfer":
                 if len(args) != 3:
-                    iosout =  "Error! Incorrect amount of arguments. Check '>help' command."
+                    iosout =  "Error! Incorrect amount of arguments. Check '> help' command."
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                     return iosout
                 
                 if args[2].isdigit() is False:
-                    iosout =  "Error! Incorrect values of the arguments. Check '>help' command."
+                    iosout =  "Error! Incorrect values of the arguments. Check '> help' command."
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                     return iosout
 
@@ -299,27 +304,57 @@ class Network:
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
 
-            elif args[0] == ">whoami":
+            elif args[0] == "whoami":
                 iosout = vm.whoami()
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
 
-            elif args[0] == ">panel":
+            elif args[0] == "rm":
+                if len(args) != 2:
+                    iosout =  "Error! Incorrect amount of arguments. Check '> help' command."
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+                
+                iosout = vm.remove(args[1])
+                self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return iosout
+
+            elif args[0] == "ps":
+                iosout = vm.ps()
+                self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return iosout
+
+            elif args[0] == "scan":
+                if len(args) != 2:
+                    iosout = "Error! Incorrect amount of arguments. Check '> help' command."
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+                
+                if args[1] == "target" and "target.config" in vm.files.keys():
+                    iosout = self.start_scan(vm, vm.files["target.config"])
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+
+                iosout = self.start_scan(vm, args[1])
+                self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return iosout
+
+            elif args[0] == "panel":
                 iosout = vm.dashboard()
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
 
-            elif args[0] == ">exploit":
+            elif args[0] == "exploit":
                 #print(args)
                 #print(f"{packet.source[0]} {vm.nick}")
 
                 if (packet.source[0] != vm.nick and len(args) != 6) or (packet.source[0] == vm.nick and len(args) != 4):
-                    iosout =  "Error! Incorrect amount of arguments. Check '>help' command."
+                    iosout = "Error! Incorrect amount of arguments. Check '> help' command."
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                     return iosout
                 
                 if args[2].isnumeric() is False or args[3].isnumeric() is False:
-                    iosout =  "Error! Incorrect values of the arguments. Check '>help' command."
+                    iosout = "Error! Incorrect values of the arguments. Check '> help' command."
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                     return iosout
                 
@@ -332,38 +367,28 @@ class Network:
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
 
-            elif args[0] == ">exit":
+            elif args[0] == "exit":
                 vm.exit(packet.source[0])
                 
                 iosout = "disconnect"
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
             
-            elif args[0] == ">proxy":
+            elif args[0] == "proxy":
                 iosout = f"proxy {vm.nick}"
                 
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
 
-            elif args[0] == ">close":
+            elif args[0] == "close":
                 iosout = vm.close()
 
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
 
-            elif args[0] == ">vsh":
+            elif args[0] == "vsh":
                 if len(args) != 4:
-                    iosout = "Error! Incorrect amount of arguments. Check '>help' command."
-                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
-                    return iosout
-                
-                if args[1] == SYSTEM_IP:
-                    if args[2] in SYSTEM_PORTS:
-                        iosout = "Error! Address responded with different protocol."
-                        self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
-                        return iosout
-
-                    iosout = "Error! Connection refused."
+                    iosout = "Error! Incorrect amount of arguments. Check '> help' command."
                     self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                     return iosout
 
@@ -401,13 +426,38 @@ class Network:
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
                     
+            elif len(args) >= 3 and args[1] == '<':
+                if args[0].endswith(".sys") is True:
+                    iosout = f"Access denied."
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+                
+                if len(args[0]) > FILENAME_LIMIT:
+                    iosout = f"Incorrect filename."
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+                
+                if len(vm.files) >= 20 and not args[0] in vm.files.keys():
+                    iosout = f"Max files amount reached."
+                    self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return iosout
+                
+                if args[0] in vm.files.keys():
+                    iosout = "File updated."
+                else:
+                    iosout = "File has been created."
+                
+                vm.files[args[0]] = ' '.join(args[2:])
+
+                self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return iosout
 
             else:
                 iosout = "Error! Command not found."
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
         
-        else:
+        else: # if not logged in:
             if args[0] == "connect":
                 if len(args) != 2:
                     iosout = "args"
@@ -427,7 +477,7 @@ class Network:
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
             
-            if args[0] == "exploit":
+            elif args[0] == "expl":
                 
                 #"exploit <id> <nick> <secret>"
                 print(args)
@@ -448,11 +498,15 @@ class Network:
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
                 
+            elif args[0] == "ping":
+                iosout = "VSH"
+                self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return iosout
+
             else:
                 iosout = "access denied"
                 self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 return iosout
-    
 
     def vm_miner(self, vm: VM):
         answer: Packet = None
@@ -494,40 +548,78 @@ class Network:
             self.notifications.append((vm.squad, vm.nick, "Exploit found."))
 
     def start_bf(self, nick: str, hashed: str) -> str:
-        self.by_nick[nick].files["BF.proc"] = f"{hashed} 0"
+
+        self.by_nick[nick].cpu.append(Process("bf", "pass"))
+        self.by_nick[nick].cpu[len(self.by_nick[nick].cpu) - 1].memory["hash"] = hashed
+        self.by_nick[nick].cpu[len(self.by_nick[nick].cpu) - 1].memory["principle"] = 0
+        
         return "Started brutforce on the hash."
 
-    def vm_bf(self, vm: VM):
+    def vm_bf(self, vm: VM, process: Process):
         guess: str = ""
-        hashed: str = None
-        principle = None
+        principle: int = None
         
-        if not "BF.proc" in vm.files.keys():
-            return
-        if vm.files["BF.proc"] == "False":
-            return
+        principle = process.memory["principle"]
 
-        hashed, principle = vm.files["BF.proc"].split()
-        principle = int(principle)
-        
         if principle > MAX_GUESS:
             vm.add_to_log("Bruteforce failed.")
-            self.notifications.append((vm.squad, vm.nick, "Bruteforce faild."))
-            vm.files["BF.proc"] = "False"
+            self.notifications.append((vm.squad, vm.nick, "Bruteforce failed."))
+            
+            process.name = "temp"
+            process.code = ["exit", ]
             return
-        
-        vm.files["BF.proc"] = f"{hashed} {principle + 1}"
 
         for i in range(0, PASSWD_LENGHT):
             guess += PASSWDS_ALPHABET[principle % len(PASSWDS_ALPHABET)]
             principle = principle // len(PASSWDS_ALPHABET)
 
         #print(guess)
-        if md5(guess.encode("ascii")).hexdigest() == hashed:
-            vm.files["BF.proc"] = "False"
-            vm.add("pass.txt", f"{hashed} => {guess}")
+        if md5(guess.encode("ascii")).hexdigest() == process.memory["hash"]:
+            vm.add("pass.txt", f"{process.memory['hash']} => {guess}")
             vm.add_to_log("Bruteforce completed.")
-            self.notifications.append((vm.squad, vm.nick, "Bruteforce completed. Check >cat pass.txt to see the resoult."))
+            self.notifications.append((vm.squad, vm.nick, "Bruteforce completed. Check > cat pass.txt to see the resoult."))
+
+            process.name = "temp"
+            process.code = ["exit", ]
+            return
+        
+        process.memory["principle"] += 1
+
+    def start_scan(self, vm: VM, target_ip: str) -> str:
+        if not target_ip in self.by_ip.keys():
+            return "Target not found."
+        
+        vm.cpu.append(Process("scan", "pass"))
+        vm.cpu[len(vm.cpu) - 1].memory["ip"] = target_ip
+        vm.cpu[len(vm.cpu) - 1].memory["recv"] = 0
+
+        return "Scan started... Check > cat scan.txt to see the resoults."
+    
+    def vm_scan(self, vm: VM, process: Process):
+        answer: Packet = None
+
+        if process.memory["recv"] == 0:
+            process.memory["recv"] = 1
+            
+            for port in range(1, 100):
+                self.send((process.memory["ip"], port), (vm.ip, int(f"{port}{port}")), "ping")
+
+        else:
+            vm.files["scan.txt"] = f"Target: {process.memory['ip']}\nOS: {OS_LIST[self.by_ip[process.memory['ip']].os]}\n{25 * '_'}\n\n\tPORT  ANSWER\n"
+            
+            if "target.config" in vm.files.keys() and vm.files["target.config"].count('\n') == 0:
+                vm.add("target.config", OS_LIST[self.by_ip[process.memory['ip']].os])
+
+            for port in range(1, 100):
+                answer = self.recv(int(f"{port}{port}"), vm)
+                
+                if answer == None:
+                    continue
+                
+                vm.files["scan.txt"] += f"\t{port:<2}:    {answer.content}\n"
+            
+            process.name = "temp"
+            process.code = ["exit", ]
 
     def buy(self, id: int, buyer: str) -> str:
 
@@ -589,7 +681,7 @@ class Network:
         if vm != None:
             if not port in vm.network.keys():
                 return None
-            
+
             return vm.network.pop(port)
         else:
             if not port in self.system_network.keys():
@@ -629,28 +721,46 @@ class Network:
 
         return True
 
-
     def cpu_loop(self):
-        # cmd: tuple = None
+        cmd: tuple = None
+        name: str = None
+        pid: int = None
 
         while self.running is True:
             for vm in self.by_nick.values():
-                self.vm_bf(vm)
+                # self.vm_bf(vm)
                 self.vm_ai(vm)
                 
-                self.vm_miner(vm)
-                self.sys_mine()
-
-                for _ in range(0, int(vm.software["miner"] / 2)):
-                    self.vm_miner(vm)
-                    self.sys_mine()
+                # self.vm_miner(vm)
+                # self.sys_mine()
+                pid = 0
                 
-                # for i in range(0, len(vm.processor)):
-                #     cmd = vm.processor[i].pop()
-                    
-                #     if cmd[0] == "QUIT":
-                #         pass
+                while pid < len(vm.cpu):
+                    cmd = vm.cpu[pid].cmd()
+                    name = vm.cpu[pid].name
 
+                    if name == "miner":
+                        for _ in range(0, (vm.software["miner"] // 4) + 1):
+                            self.vm_miner(vm)
+                            self.sys_mine()
+                    
+                    elif name == "scan":
+                        self.vm_scan(vm, vm.cpu[pid])
+
+                    elif name == "vsh":
+                        self.vsh(vm)
+
+                    elif name == "bf":
+                        self.vm_bf(vm, vm.cpu[pid])
+
+                    elif cmd[0] == "exit":
+                        vm.cpu.pop(pid)
+                        pid -= 1
+
+                    elif cmd[0] == "pass":
+                        pass
+
+                    pid += 1    
             
             sleep(FREQUENCY)
 

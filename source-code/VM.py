@@ -57,31 +57,37 @@ VM_HELP: str = """
 
   ## General:
 
-    - >help -------------------> [❔] display this commands' help message
+    - > help -------------------> [❔] display this commands' help message
     
-    - >panel ------------------> [📟] display dashboard with info about the machine
+    - > panel ------------------> [📟] display dashboard with info about the machine
     
-    - >transfer <nick><value> -> transfer <value> of CV to the VM of the <nick> player
+    - > transfer <nick><value> -> transfer <value> of CV to the VM of the <nick> player
 
-    - >close ------------------> [🛡] close external vsh connections to your VM
+    - > close ------------------> [🛡] close external vsh connections to your VM
   
+    - > ps ---------------------> display currently running processes
+
+    - > scan <IP> --------------> scan the IP for open ports and other details
+
   ## Files:
 
-    - >ls ---------------------> [📁] list files of currently logged user
+    - > ls ---------------------> [📁] list files of currently logged user
     
-    - >cat <filename> ---------> display content of the file
+    - > cat <filename> ---------> display content of the file
+
+    - > rm <filename> ----------> remove file
   
   ## VSH:
 
-    - >exploit <IP><port><ID> -> run the exploit (with ID, check $archives first)
+    - > exploit <IP><port><ID> -> run the exploit (with ID, check $archives first)
     
-    - >vsh <IP><port><passwd> -> connect to IP's VM (Virtual Machine)
+    - > vsh <IP><port><passwd> -> connect to IP's VM (Virtual Machine)
 
-    - >whoami -----------------> display currently-logged user's nick and IP
+    - > whoami -----------------> display currently-logged user's nick and IP
   
-    - >exit -------------------> close last vsh connection
+    - > exit -------------------> close last vsh connection
   
-    - >proxy ------------------> display your vsh connection path
+    - > proxy ------------------> display your vsh connection path
 
 """
 
@@ -95,28 +101,6 @@ class Packet:
     def __init__(self, source: tuple, content: str):
         self.source = source
         self.content = content
-
-
-class Process:
-    system: bool = None 
-    cmds: list[tuple[str]] = None
-    pointer: int = None
-    #memory: dict[str] = None
-
-    def __init__(self, cmds: list[tuple[str]], system: bool):
-        self.cmds = cmds
-        self.system = system
-        self.pointer = 0
-        #self.memory = []
-        self.indexes = {}
-
-    def pop(self) -> tuple[str]:
-        cmd: tuple[str] = self.cmds[self.pointer]
-        
-        self.pointer += 1
-        self.pointer = self.pointer % len(self.cmds)
-        
-        return cmd
 
 
 class Exploit:
@@ -133,6 +117,30 @@ class Exploit:
         self.success_rate = success_rate
         self.secret = secret
     
+class Process:
+    name: str = None
+    memory: dict[str, int | str] = None
+    code: list[str] = None
+    pointer: int = None
+
+    def __init__(self, name: str, code: str):
+        self.name = name
+        self.memory = {}
+        self.pointer = 0
+        self.code = code.splitlines()
+    
+    def forward(self) -> None:
+        self.pointer += 1
+        self.pointer = self.pointer % len(self.code)
+
+    def cmd(self) -> list[str]:
+        output: str = self.code[self.pointer].split()
+        
+        self.forward()
+
+        return output
+
+
 class VM:
     '''class that represents single virtual machine'''
     nick: str = None
@@ -147,7 +155,7 @@ class VM:
     exploits: list[Exploit] = None#list[tuple[int, int, int, int, int]] = None # [(category<EXPLOITS>, lvl, os<OS_LIST>, success_rate<50-80>, secret<0-100>[to prevent unpriviliged useage])]
 
     network: dict = None
-    processor: list[Process] = None
+    cpu: list[Process] = None
 
     port_config: dict = None#{software: port}
     logged_in: list = None
@@ -171,6 +179,16 @@ class VM:
         
         return "File has been updated."
     
+    def remove(self, filename: str) -> str:
+        if filename.endswith(".sys") is True or filename.endswith(".config") is True:
+            return "Access denied."
+
+        if not filename in self.files.keys():
+            return "File not found."
+
+        self.files.pop(filename)
+        return "File has been deleted."
+
     def add_to_log(self, content: str):
         self.add("log.sys", f"o [{gmtime().tm_mon:0>2}/{gmtime().tm_mday:0>2}; {gmtime().tm_hour:0>2}:{gmtime().tm_min:0>2}] -> {content}", True)
         
@@ -181,18 +199,21 @@ class VM:
         # if lines_amount > 20:
         #     self.files["log.sys"] = "\n".join(self.files["log.sys"].splitlines()[lines_amount - 20:])
 
-    def start(self, code: str, by_system=False):
-        cmds: list[tuple[str]] = []
-
-        for line in code.splitlines():
-            if line != '':
-                cmds.append(tuple(line.split()))
-
-        self.processor.append(Process(cmds, by_system))
+    def start(self):
+        pass
 
     def help(self) -> str:
         return VM_HELP
     
+    def ps(self) -> str:
+        output: str = f"Processes at {self.nick}({self.ip}):\n"
+
+        for i in range(len(self.cpu)):
+            output += f"\t{i}: {self.cpu[i].name}\n"
+        
+        return output
+        
+
     def ls(self) -> str:
         # files: str = '\n'.join(list(self.files.keys()))
         files: str = ""
@@ -201,9 +222,9 @@ class VM:
             if filename.endswith(".proc"):
                 continue
             
-            files += f"\t{filename}\n"
+            files += f"\t{filename}\n\n"
 
-        return f"Files at {self.nick}({self.ip}):\n{files}"
+        return f"Files at {self.nick}({self.ip}):\n\n{files}"
 
     def cat(self, filename: str) -> str:
         if not filename in self.files.keys():
@@ -239,10 +260,13 @@ class VM:
         if lines_amount >= 3:
             line3 = lines[lines_amount - 3][20:]
         
-        if "BF.proc" in self.files.keys() and self.files["BF.proc"] != "False":
-            bf_state = "on"
-        if "AI.proc" in self.files.keys() and self.files["AI.proc"] != "False":
-            ai_state = "on"
+        for process in self.cpu:
+            if process.name == "bf":
+                bf_state = "on"
+
+        for process in self.cpu:
+            if process.name == "ai":
+                ai_state = "on"
 
         return f"""
 _______________________________________
@@ -291,13 +315,11 @@ _______________________________________
         self.exploits = exploits
         self.port_config = port_config
         #self.t_zone = t_zone
-
-        self.processor = []
+        
+        self.cpu = [Process("miner", "pass"), Process("vsh", "pass")]
         self.network = {}
         self.logged_in = [nick, ]
         self.forward_to = {}
-
-        self.start("vsh-server")
 
         for program_name in DEFAULT_SOFTWARE.keys():
             if not program_name in self.software.keys():

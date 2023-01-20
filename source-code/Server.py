@@ -158,6 +158,15 @@ MINI_GAMES_HELP: str = """
 
 """
 
+ATTACK_PANEL: str = """
+🔎 = scan
+📋 = scan resoults
+
+🗃 = exploits archives
+🎛 = kernel exploit
+🗜 = vsh exploit
+"""
+
 
 class Server:
 
@@ -282,14 +291,15 @@ class Server:
         answer = self.network.vsh(self.network.by_nick[nick])
         message = await self.__send__(answer, squad_terminal, author, color=True)
         
-        await message.add_reaction('📟') # >panel
-        await message.add_reaction('📁') # >ls
-        await message.add_reaction('📑') # >cat log.sys
+        await self.__add_buttons__(message, ['📟', '📁', '📑', '🛡', '⚔', '❔'])
+        #await message.add_reaction('📟') # >panel
+        #await message.add_reaction('📁') # >ls
+        #await message.add_reaction('📑') # >cat log.sys
         #await message.add_reaction('💳') # >cat miner.config
-        await message.add_reaction('🛡') # >close
-        await message.add_reaction('🗃') #🗂 >archives
+        #await message.add_reaction('🛡') # >close
+        #await message.add_reaction('🗃') #🗂 >archives
         #await message.add_reaction('📝') # IP/passwds lists' files
-        await message.add_reaction('❔')
+        #await message.add_reaction('❔')
 
     async def __send__(self, content: str, channel: discord.TextChannel, user: discord.Member=None, color: bool=False) -> discord.Message:
         if user == None:
@@ -347,7 +357,7 @@ class Server:
                     await self.__send__("Incorrect transfer value!", terminal, author)
                     return
 
-                self.network.transfer(int(args[2]), args[1])
+                self.network.transfer(int(args[1]), args[2])
                 await self.guild.get_channel(CHANNELS["chat"]).send(f"@everyone\n :gift: **{args[2]} has just been gifted {args[1]} CV!**\n\tCongratulations!")
 
         elif args[0] == "join":
@@ -388,22 +398,36 @@ class Server:
             await self.__send__(f"System account: {self.network.bank:_} [CV]", terminal, author, True)
         
         
+    async def __attack_panel__(self, squad_terminal: discord.TextChannel, author: discord.Member):
+        message: discord.Message = await self.__send__(ATTACK_PANEL, squad_terminal, author)
+
+        await self.__add_buttons__(message, ['🔎', '📋', '🗃', '🎛', '🗜'])
 
     async def __squad__(self, squad_terminal: discord.TextChannel, author: discord.Member, args: list[str]=None, reaction: discord.Reaction=None):
         
         if args == None:
             if reaction.emoji == '📟':
-                args = [">panel",]
+                args = ['>', "panel",]
             elif reaction.emoji == '📁':
-                args = [">ls",]
+                args = ['>', "ls",]
             elif reaction.emoji == '📑':
-                args = [">cat", "log.sys"]
+                args = ['>', "cat", "log.sys"]
             elif reaction.emoji == '🛡':
-                args = [">close",]
-            elif reaction.emoji == '🗃':#🗂
+                args = ['>', "close",]
+            elif reaction.emoji == '🗃':
                 args = ["$archives",]
             elif reaction.emoji == '❔':
-                args = [">help",]
+                args = ['>', "help",]
+            elif reaction.emoji == '⚔':
+                args = ["$attack"]
+            elif reaction.emoji == '🔎':
+                args = ['>', "scan", "target"]
+            elif reaction.emoji == '📋':
+                args = ['>', "cat", "scan.txt"]
+            elif reaction.emoji == '🎛':
+                args = ['>', "vsh_exploit", ]
+            elif reaction.emoji == '🗜':
+                args = ['>', "kernel_exploit", ]
             else:
                 args = ["nothing",]
 
@@ -490,7 +514,7 @@ class Server:
 
         elif args[0] == "$whois":
             if len(args) != 2:
-                await self.__send__("Incorrect amount of arguments. Take a look at '>help' command.", squad_terminal, author)
+                await self.__send__("Incorrect amount of arguments. Take a look at '> help' command.", squad_terminal, author)
                 return
 
             if not args[1] in self.network.by_ip.keys():
@@ -498,16 +522,19 @@ class Server:
                 return
             
             await self.__send__(f"{args[1]}:\n\tnick: {self.network.by_ip[args[1]].nick}\n\tsquad: {self.network.by_ip[args[1]].squad}", squad_terminal, author)
+        
+        elif args[0] == "$attack":
+            await self.__attack_panel__(squad_terminal, author)
 
         elif args[0] == "$ai":
             if self.__check_role__(author, ROLES["Hacker"]) is False:
                 await self.__send__("You are not registered yet... See `help` cmd here.", squad_terminal, author)
                 return
             if len(args) != 2:
-                await self.__send__("Incorrect amount of arguments. Take a look at '>help' command.", squad_terminal, author)
+                await self.__send__("Incorrect amount of arguments. Take a look at '> help' command.", squad_terminal, author)
                 return
             if args[1].isdigit() is False:
-                await self.__send__("Incorrect arguments' values. Take a look at '>help' command.", squad_terminal, author)
+                await self.__send__("Incorrect arguments' values. Take a look at '> help' command.", squad_terminal, author)
                 return
 
             if self.network.start_ai(author.display_name, int(args[1])) is True:
@@ -520,7 +547,7 @@ class Server:
                 await self.__send__("You are not registered yet... See `help` cmd here.", squad_terminal, author)
                 return
             if len(args) != 2:
-                await self.__send__("Incorrect amount of arguments. Take a look at '>help' command.", squad_terminal, author)
+                await self.__send__("Incorrect amount of arguments. Take a look at '> help' command.", squad_terminal, author)
                 return
             
             await self.__send__(self.network.start_bf(author.display_name, args[1]), squad_terminal, author)
@@ -532,27 +559,12 @@ class Server:
 
             await self.__send__(self.network.by_nick[author.display_name].archives(), squad_terminal, author, True)
 
-        # elif args[0] == ">run":
-        #     if self.__check_role__(author, ROLES["Hacker"]) is False:
-        #         await self.__send__("You are not registered yet... See `help` cmd here.", squad_terminal, author)
-        #         return
-
-        #     if len(args) != 4:
-        #         await self.__send__("Incorrect amount of arguments. Take a look at '>help' command.", squad_terminal, author)
-        #         return
-            
-        #     if args[2].isdigit() is False or args[3].isdigit() is False:
-        #         await self.__send__("Incorrect arguments' values. Take a look at '>help' command.", squad_terminal, author)
-        #         return
-            
-        #     await self.__send__(self.network.exploit(args[1], int(args[2]), int(args[3]), author.display_name), squad_terminal, author)
-
-        elif args[0][0] == ">":
+        elif args[0] == '>':
             if self.__check_role__(author, ROLES["Hacker"]) is False:
                 await self.__send__("You are not registered yet... See `help` cmd here.", squad_terminal, author)
                 return
             
-            await self.__vsh__(args, squad_terminal, author)
+            await self.__vsh__(args[1:], squad_terminal, author)
 
     async def __add_buttons__(self, message: discord.Message, emoijs: tuple[str]):
         for emoji in emoijs:
