@@ -136,9 +136,13 @@ class Process:
     def cmd(self) -> list[str]:
         output: str = self.code[self.pointer].split()
         
-        self.forward()
+        # self.forward()
 
         return output
+
+    def kill(self) -> None:
+        self.name = "temp"
+        self.code = ["exit", ]
 
 
 class VM:
@@ -192,13 +196,6 @@ class VM:
     def add_to_log(self, content: str):
         self.add("log.sys", f"o [{gmtime().tm_mon:0>2}/{gmtime().tm_mday:0>2}; {gmtime().tm_hour:0>2}:{gmtime().tm_min:0>2}] -> {content}", True)
         
-        #lines_amount: int = self.files["log.sys"].count('\n') + 2
-        
-        # self.files["log.sys"] += f"\no [{gmtime().tm_mon:0>2}/{gmtime().tm_mday:0>2}; {gmtime().tm_hour:0>2}:{gmtime().tm_min:0>2}] -> {content}"
-
-        # if lines_amount > 20:
-        #     self.files["log.sys"] = "\n".join(self.files["log.sys"].splitlines()[lines_amount - 20:])
-
     def start(self):
         pass
 
@@ -254,11 +251,11 @@ class VM:
         ai_state: str = "off"
         
         if lines_amount >= 1:
-            line1 = lines[lines_amount - 1][20:]
+            line1 = lines[lines_amount - 1][20:56]
         if lines_amount >= 2:
-            line2 = lines[lines_amount - 2][20:]
+            line2 = lines[lines_amount - 2][20:56]
         if lines_amount >= 3:
-            line3 = lines[lines_amount - 3][20:]
+            line3 = lines[lines_amount - 3][20:56]
         
         for process in self.cpu:
             if process.name == "bf":
@@ -299,10 +296,15 @@ _______________________________________
         
         return f"{counter} connection(s) closed."
 
+    def execute(self, pid: int) -> None:
+        cmd = self.cpu[pid].cmd()
 
-    #def start(self, cmd: str, file: str=None, line: int=None):
-    #    self.processor.append(Process(cmd, file, line))
-
+        if cmd[0] == "echo":
+            for arg in cmd[1:]:
+                pass
+        
+        elif cmd[0] == "pass":
+            pass
 
     def __init__(self, nick: str, squad: str, ip: str, os: int, wallet: int=0, software: dict={}, files: dict={}, exploits: list=[], port_config: dict={}):
         self.nick = nick

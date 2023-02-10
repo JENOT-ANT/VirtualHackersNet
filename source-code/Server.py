@@ -401,7 +401,7 @@ class Server:
     async def __attack_panel__(self, squad_terminal: discord.TextChannel, author: discord.Member):
         message: discord.Message = await self.__send__(ATTACK_PANEL, squad_terminal, author)
 
-        await self.__add_buttons__(message, ['🔎', '📋', '🗃', '🎛', '🗜'])
+        await self.__add_buttons__(message, ['🔎', '📋', '🗃', '🛠'])#'🎛', '🗜'])
 
     async def __squad__(self, squad_terminal: discord.TextChannel, author: discord.Member, args: list[str]=None, reaction: discord.Reaction=None):
         
@@ -424,6 +424,8 @@ class Server:
                 args = ['>', "scan", "target"]
             elif reaction.emoji == '📋':
                 args = ['>', "cat", "scan.txt"]
+            elif reaction.emoji == '🛠':
+                args = ["$ai", "max"]
             elif reaction.emoji == '🎛':
                 args = ['>', "vsh_exploit", ]
             elif reaction.emoji == '🗜':
@@ -530,17 +532,8 @@ class Server:
             if self.__check_role__(author, ROLES["Hacker"]) is False:
                 await self.__send__("You are not registered yet... See `help` cmd here.", squad_terminal, author)
                 return
-            if len(args) != 2:
-                await self.__send__("Incorrect amount of arguments. Take a look at '> help' command.", squad_terminal, author)
-                return
-            if args[1].isdigit() is False:
-                await self.__send__("Incorrect arguments' values. Take a look at '> help' command.", squad_terminal, author)
-                return
-
-            if self.network.start_ai(author.display_name, int(args[1])) is True:
-                await self.__send__("Production of the exploit has just started.", squad_terminal, author)
-            else:
-                await self.__send__("Incorrect lvl (maximum is the lvl of your AI) or max amount of exploits (20) reached!", squad_terminal, author)
+            
+            await self.__send__(self.network.start_ai(author.display_name, args), squad_terminal, author)
 
         elif args[0] == "$bf":
             if self.__check_role__(author, ROLES["Hacker"]) is False:
