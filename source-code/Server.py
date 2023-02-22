@@ -4,15 +4,16 @@
 
 import discord
 #from discord.ext import commands
-from Network import Network
+from Network import Network, Offer
 import asyncio
 import threading
 from time import asctime, gmtime
 from datetime import timedelta
 
 from Squad import RANKS, INT_TO_RANK
-from VM import OS_LIST
+from VM import VM, OS_LIST, EXPLOITS
 from Games import GAMES, TicTacToe
+from Errors import error
 
 SERVER_ID: int = 1024343901038985267
 
@@ -43,6 +44,11 @@ ROLES: dict = {
     "Squad-Recruit": 1030572112068485212,
 }
 
+TAGS: dict = {
+    "exploits": 1041789556091015288,
+    "system": 1049032139930337350,
+}
+
 DEFAULT_TIMEOUT: int = 60 * 30
 
 SQUAD_NAMES_ALPHABET: str = "abcdefghijklmnopqrstuvwxyz-"
@@ -71,7 +77,7 @@ GLOBAL_HELP: str = """
   
   ## Admin commands:
     
-    - !gift <CV><nick> ---> transfer some CV to the player
+    - !gift <nick><CV> ---> transfer some CV to the player
     
     - !clear -------------> delete all messages in the terminal
     
@@ -109,9 +115,9 @@ SQUAD_HELP: str = f"""
     
     - !enroll --------------> Open/close enrollment to squad
     
-    - !promote <nick> ------> (N)promote a member by one rank
+    - !promote <nick> ------> promote a member by one rank
     
-    - !demote <nick> -------> (N)demote a member by one rank
+    - !demote <nick> -------> demote a member by one rank
     
     - !farewell <nick> -----> (N)dismiss a member from the squad
 """
@@ -276,7 +282,7 @@ class Server:
         await member.add_roles(self.guild.get_role(ROLES[role]))
 
         # output
-        await self.__send__(f"@everyone\n{member.display_name} has been promoted to {role}.", squad_channel)
+        await self.__send__(f"{member.display_name} has been (pro/de)moted to {role}.", squad_channel)
 
     async def __vsh__(self, args: tuple[str, ...], squad_terminal: discord.TextChannel, author: discord.Member):
         ip: str = None
@@ -292,14 +298,6 @@ class Server:
         message = await self.__send__(answer, squad_terminal, author, color=True)
         
         await self.__add_buttons__(message, ['📟', '📁', '📑', '🛡', '⚔', '❔'])
-        #await message.add_reaction('📟') # >panel
-        #await message.add_reaction('📁') # >ls
-        #await message.add_reaction('📑') # >cat log.sys
-        #await message.add_reaction('💳') # >cat miner.config
-        #await message.add_reaction('🛡') # >close
-        #await message.add_reaction('🗃') #🗂 >archives
-        #await message.add_reaction('📝') # IP/passwds lists' files
-        #await message.add_reaction('❔')
 
     async def __send__(self, content: str, channel: discord.TextChannel, user: discord.Member=None, color: bool=False) -> discord.Message:
         if user == None:
@@ -312,13 +310,12 @@ class Server:
 
         async for message in channel.history():
             if (author == None or message.author == author) and counter >= keep:
-                await message.delete()
-            
+                    await message.delete()
+
             await asyncio.sleep(0.7)
             counter += 1
 
     async def __terminal__(self, terminal: discord.TextChannel, author: discord.Member, args: tuple) -> None:
-        #checkpoint: bool = None
 
         if args[0] == "help":
             await self.__send__(GLOBAL_HELP, terminal, author)
@@ -403,6 +400,14 @@ class Server:
 
         await self.__add_buttons__(message, ['🔎', '📋', '🗃', '🛠'])#'🎛', '🗜'])
 
+
+    async def __add_offer_post__(self, author: discord.Member, exploit_id: int, price: str):
+        store: discord.ForumChannel = self.guild.get_channel(CHANNELS["exchange"])
+        vm: VM = self.network.by_nick[author.display_name]
+        offer: Offer = self.network.offers[-1]
+
+        await store.create_thread(name=f"[ {len(self.network.offers) - 1} ] --{EXPLOITS[offer.content.category].upper()} {OS_LIST[offer.content.os]} {offer.content.lvl}--", content=f"**By:** {author.mention}\n**Price:** {price} CV\n**Success rate:** {offer.content.success_rate} %", applied_tags=[store.get_tag(TAGS["exploits"]), ])
+
     async def __squad__(self, squad_terminal: discord.TextChannel, author: discord.Member, args: list[str]=None, reaction: discord.Reaction=None):
         
         if args == None:
@@ -468,7 +473,22 @@ class Server:
                     return
                 
                 await self.__promote__(squad_terminal, self.guild.get_member_named(args[1]))
-
+        
+            elif args[0] == "!demote":
+                if len(args) != 2:
+                    await self.__send__("Incorrect amount of arguments. Take a look at 'help' command.", squad_terminal, author)
+                    return
+                
+                if not args[1] in self.network.squads[squad_terminal.name].members:
+                    await self.__send__("Member not found.", squad_terminal, author)
+                    return
+                
+                if self.network.squads[squad_terminal.name].members[args[1]] == RANKS["recruit"]:
+                    await self.__send__("Member has already minimal rank.", squad_terminal, author)
+                    return
+                
+                await self.__promote__(squad_terminal, self.guild.get_member_named(args[1]), True)
+        
         elif args[0] == "register":
         
             if self.__check_role__(author, ROLES["Hacker"]) is True:
@@ -551,6 +571,25 @@ class Server:
                 return
 
             await self.__send__(self.network.by_nick[author.display_name].archives(), squad_terminal, author, True)
+
+        elif args[0] == "$sell":
+            if self.__check_role__(author, ROLES["Hacker"]) is False:
+                await self.__send__(error(6, 0), squad_terminal, author)
+                return
+            if len(args) != 3:
+                await self.__send__(error(0, 1), squad_terminal, author)
+                return
+            if args[1].isdigit() is False or args[2].isdigit() is False:
+                await self.__send__(error(1, 1), squad_terminal, author)
+                return
+            
+
+            if self.network.sell_exploit(self.network.by_nick[author.display_name], int(args[2]), int(args[1])) is False:
+                await self.__send__(error(5, 6), squad_terminal, author)
+                return
+            
+            await self.__add_offer_post__(author, int(args[1]), args[2])
+            await self.__send__(f"Your offer's id is: {len(self.network.offers) - 1}", squad_terminal, author)
 
         elif args[0] == '>':
             if self.__check_role__(author, ROLES["Hacker"]) is False:
@@ -692,6 +731,8 @@ class Server:
             report_message = await self.guild.get_channel(CHANNELS["quick-report"]).send("React with :warning: emoij to quickly notify **MODS** about some **rules-braking** incident.")
             await report_message.add_reaction("⚠")
 
+            #print([f"{tag.name}: {tag.id}" for tag in self.guild.get_channel(CHANNELS["exchange"]).available_tags])
+
             while True:
                 for notification in self.network.notifications:
                     
@@ -717,7 +758,7 @@ class Server:
             author: discord.Member = None
             channel: discord.TextChannel = None
             args: list = None
-            history: list[discord.Message] = None
+            # history: list[discord.Message] = None
 
             author = message.author
             
@@ -765,21 +806,18 @@ class Server:
                 return
 
             if channel.category_id == CATEGORIES["SQUADS"]:
-                history = [msg async for msg in channel.history(limit=HISTORY_LIMIT + 10)]
+                # history = [msg async for msg in channel.history(limit=HISTORY_LIMIT + 10)]
 
-                if len(history) > HISTORY_LIMIT:
-                    await channel.delete_messages(history[HISTORY_LIMIT:])
-                    # await history[20:][0].delete()
+                # if len(history) > HISTORY_LIMIT:
+                #     await channel.delete_messages(history[HISTORY_LIMIT:])
                 
-                #print(args)
                 await self.__squad__(channel, author, args=args)
 
             elif channel.id == CHANNELS["terminal"]:
-                history = [msg async for msg in channel.history(limit=HISTORY_LIMIT + 5)]
+                # history = [msg async for msg in channel.history(limit=HISTORY_LIMIT + 5)]
 
-                if len(history) > HISTORY_LIMIT:
-                    await channel.delete_messages(history[HISTORY_LIMIT:])
-                    # await history[20:][0].delete()
+                # if len(history) > HISTORY_LIMIT:
+                #     await channel.delete_messages(history[HISTORY_LIMIT:])
 
                 print(args)
                 await self.__terminal__(channel, author, args)

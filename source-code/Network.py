@@ -1,9 +1,7 @@
 # TODO:
-#   1. Translate start_ai and vm_ai methods to fit new cpu API
 #   2. Move args checking from method Server.__squads__ to start_ai
 #   3. Create error database
 #   4. Move file editing from vsh code to VM method
-#   5. Create function for vsh returning that would get iosout, send it and return it
 #   6. Create some sort of API in the Squad class that would replace trash code like changing nick and other stuff in variety of places
 #   7. Change Server.__send__ method to add code embody optional
 #   8. (?) Move key filenames to some constants
@@ -28,6 +26,8 @@ FOUND_CV_AMOUNT: int = 4
 PASSWD_LENGHT: int = 4
 PASSWDS_ALPHABET: str = "02458AMPQYZ"
 MAX_GUESS: int = len(PASSWDS_ALPHABET)**PASSWD_LENGHT
+
+MAX_EXPLOITS_AMOUNT: int = 20
 
 SYSTEM_IP: str = "0.0.0.0"
 
@@ -56,10 +56,10 @@ class Offer:
     seller: str = None
     type: int = None
     price: int = None
-    content: str = None
+    content: str | Exploit = None
 
 
-    def __init__(self, seller: str, type: int, price: int, content: str):
+    def __init__(self, seller: str, type: int, price: int, content: str | Exploit):
         self.seller = seller
         self.type = type
         self.price = price
@@ -398,7 +398,7 @@ class Network:
                 iosout = vm.dashboard()
                 return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
             
-            elif args[0] == "clearl":
+            elif args[0] == "clear":
                 if len(args) != 2:
                     iosout = error(0, 1)
                     return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
@@ -572,7 +572,7 @@ class Network:
         if self.by_nick[nick].software["AI"] < lvl:
             return error(2, 2)
 
-        if len(self.by_nick[nick].exploits) >= 20:
+        if len(self.by_nick[nick].exploits) >= MAX_EXPLOITS_AMOUNT:
             return error(3)
 
         # self.by_nick[nick].files["AI.proc"] = f"{int(time())} {lvl}"
@@ -588,7 +588,7 @@ class Network:
 
         if start_time + AI_TIME <= int(time()):
             # produce a random exploit (take a look at VM.exploits for a template)
-            vm.exploits.append(Exploit(randint(0, len(EXPLOITS) - 1), lvl, randint(0, len(OS_LIST) - 1), randint(50, 100), uuid4()))
+            vm.exploits.append(Exploit(randint(0, len(EXPLOITS) - 1), lvl, randint(0, len(OS_LIST) - 1), randint(50, 100)))
             
             process.kill()
             
@@ -669,19 +669,37 @@ class Network:
             process.name = "temp"
             process.code = ["exit", ]
 
-    def buy(self, id: int, buyer: str) -> str:
+    def sell_exploit(self, vm: VM, price: int, exploit_id: int) -> bool:
+        if exploit_id >= len(vm.exploits):
+            return False
+        
+        self.offers.append(Offer(vm.nick, OFFER_TYPES["exploit"], price, vm.exploits.pop(exploit_id)))
 
-        if self.transfer(self.offers[id].price, self.offers[id].seller, buyer) is False:
-            return "Purchase failed."
-        else:
-            if self.offers[id].type == OFFER_TYPES["update"]:
-                if self.by_nick[buyer].software[self.offers[id].content] >= MAX_SOFTWARE[self.offers[id].content]:
-                    return "Purchase failed! Max lvl reached."
-                
-                self.by_nick[buyer].software[self.offers[id].content] += 1
+        return True
 
+    def buy(self, offer_id: int, buyer: str) -> str:
+        
+        if self.offers[offer_id].type == OFFER_TYPES["update"] and self.by_nick[buyer].software[self.offers[offer_id].content] >= MAX_SOFTWARE[self.offers[offer_id].content]:
+            return error(4, 3)
 
-            return f"{buyer} has just bought #{id} from exchange."
+        if self.offers[offer_id].type == OFFER_TYPES["exploit"] and len(self.by_nick[buyer].exploits) >= MAX_EXPLOITS_AMOUNT:
+            return error(4, 4)
+        
+        if self.transfer(self.offers[offer_id].price, self.offers[offer_id].seller, buyer) is False:
+            return error(4, 5)
+        
+
+        if self.offers[offer_id].type == OFFER_TYPES["update"]:
+            self.by_nick[buyer].software[self.offers[offer_id].content] += 1
+
+        if self.offers[offer_id].type == OFFER_TYPES["exploit"]:
+            self.offers[offer_id].content.reset()
+
+            self.by_nick[buyer].exploits.append(self.offers[offer_id].content)
+            
+            self.offers.pop(offer_id)
+
+        return f"{buyer} has just bought #{offer_id} from exchange."
 
     def __generate_ip__(self) -> str:
         ip: str = f"{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}"

@@ -55,6 +55,8 @@ VM_HELP: str = """
 
     - $archives ---------------> [🗃] list owned exploits
 
+    - $sell <id><price> -------> make an offer at the store for an exploit with the id
+  
   ## General:
 
     - > help -------------------> [❔] display this commands' help message
@@ -110,12 +112,15 @@ class Exploit:
     success_rate: int = None
     secret: UUID = None
 
-    def __init__(self, category: int, lvl: int, os: int, success_rate: int, secret: UUID):
+    def __init__(self, category: int, lvl: int, os: int, success_rate: int):
         self.category = category
         self.lvl = lvl
         self.os = os
         self.success_rate = success_rate
-        self.secret = secret
+        self.reset()
+    
+    def reset(self) -> None:
+        self.secret = uuid4()
     
 class Process:
     name: str = None
