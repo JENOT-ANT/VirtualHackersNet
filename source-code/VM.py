@@ -28,6 +28,7 @@ DEFAULT_SOFTWARE: dict = {
     "dns": 0,
 }
 
+# ports < 10 are not allowed
 # ports > 1000 are not allowed, they are for responding connections, np. respond from vsh: 2222, from vtp: 8080, etc.
 DEFAULT_PORT_CONFIG: dict = {
     "vtp": 80,
@@ -56,7 +57,9 @@ VM_HELP: str = """
     - $archives ---------------> [🗃] list owned exploits
 
     - $sell <id><price> -------> make an offer at the store for an exploit with the id
-  
+    
+    - $vshcfg <port> ----------> change the port that your vsh is served on
+
   ## General:
 
     - > help -------------------> [❔] display this commands' help message
@@ -68,9 +71,13 @@ VM_HELP: str = """
     - > close ------------------> [🛡] close external vsh connections to your VM
   
     - > ps ---------------------> display currently running processes
+  
+  ## Hacking:
 
     - > scan <IP> --------------> scan the IP for open ports and other details
 
+    - > exploit <IP><port><ID> -> run the exploit (with ID, check $archives first)
+  
   ## Files:
 
     - > ls ---------------------> [📁] list files of currently logged user
@@ -80,11 +87,9 @@ VM_HELP: str = """
     - > rm <filename> ----------> remove file
   
   ## VSH:
-
-    - > exploit <IP><port><ID> -> run the exploit (with ID, check $archives first)
-    
+  
     - > vsh <IP><port><passwd> -> connect to IP's VM (Virtual Machine)
-
+    
     - > whoami -----------------> display currently-logged user's nick and IP
   
     - > exit -------------------> close last vsh connection
@@ -124,7 +129,7 @@ class Exploit:
     
 class Process:
     name: str = None
-    memory: dict[str, int | str] = None
+    memory: dict[str, str] = None #dict[str, int | str]
     code: list[str] = None
     pointer: int = None
 
@@ -163,7 +168,8 @@ class VM:
     files: dict[str, str] = None
     exploits: list[Exploit] = None#list[tuple[int, int, int, int, int]] = None # [(category<EXPLOITS>, lvl, os<OS_LIST>, success_rate<50-80>, secret<0-100>[to prevent unpriviliged useage])]
 
-    network: dict = None
+    network: dict[int, str] = None
+    netout: list[Packet] = None
     cpu: list[Process] = None
 
     port_config: dict = None#{software: port}
@@ -200,7 +206,10 @@ class VM:
 
     def add_to_log(self, content: str):
         self.add("log.sys", f"o [{gmtime().tm_mon:0>2}/{gmtime().tm_mday:0>2}; {gmtime().tm_hour:0>2}:{gmtime().tm_min:0>2}] -> {content}", True)
-        
+
+    def send(self, destination: tuple[int, str], content: str):
+        self.netout.append(Packet(destination, content))
+
     def start(self):
         pass
 
@@ -221,8 +230,8 @@ class VM:
         files: str = ""
 
         for filename in self.files.keys():
-            if filename.endswith(".proc"):
-                continue
+            # if filename.endswith(".proc"):
+            #     continue
             
             files += f"\t{filename}\n\n"
 
@@ -325,6 +334,7 @@ _______________________________________
         
         self.cpu = [Process("miner", "pass"), Process("vsh", "pass")]
         self.network = {}
+        self.netout = []
         self.logged_in = [nick, ]
         self.forward_to = {}
 
@@ -338,6 +348,7 @@ _______________________________________
 
         if not "miner.config" in self.files.keys():
             self.files["miner.config"] = self.nick
+
 
         for program in DEFAULT_PORT_CONFIG.keys():
             if not program in self.port_config.keys():

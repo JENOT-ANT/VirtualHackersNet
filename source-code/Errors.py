@@ -5,7 +5,8 @@ ERRORS: dict = {
     3: "max amount of exploits reached",
     4: "purchase failed",
     5: "failed to add the offer",
-    6: "you are not registered yet"
+    6: "you are not registered yet",
+    7: "failed to join to the squad",
 }
 
 EXPLANATIONS: dict = {
@@ -16,6 +17,7 @@ EXPLANATIONS: dict = {
     4: "max amount of exploits reached",
     5: "transaction failed",
     6: "no exploit with that id",
+    7: "max amount of members reached",
 }
 
 

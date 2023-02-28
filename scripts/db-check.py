@@ -11,7 +11,8 @@ def main():
     sys.path.append("source-code")
     
     import VM
-    
+    import Network
+
     db: shelve.Shelf = None
 
     chdir(f"{dirname(__file__)}/../{GAME_DATA_DIR}")
@@ -33,6 +34,7 @@ def main():
 
     print()
     print(db["bank"])
+    print([offer.content for offer in db["offers"]])
     db.close()
 
     

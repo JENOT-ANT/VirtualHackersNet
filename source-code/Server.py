@@ -10,7 +10,7 @@ import threading
 from time import asctime, gmtime
 from datetime import timedelta
 
-from Squad import RANKS, INT_TO_RANK
+from Squad import RANKS, INT_TO_RANK, MAX_MEMBERS
 from VM import VM, OS_LIST, EXPLOITS
 from Games import GAMES, TicTacToe
 from Errors import error
@@ -105,7 +105,7 @@ SQUAD_HELP: str = f"""
     - register <nick><OS> -> create a new Virtua Machine (VM) for yourself,
         avielable OS: {OS_LIST}
     
-    - panel ---------------> (N)display basic info about the squad
+    - panel ---------------> display basic info about the squad
     
     - time ----------------> display server time
     
@@ -199,7 +199,7 @@ class Server:
                     leader = member
                     break
 
-            squad_list += f"{squad.name:16} | {len(squad.members.keys()):2}/12 | {'open' if squad.recruting is True else 'close':5} | {leader}\n"
+            squad_list += f"{squad.name:16} | {len(squad.members.keys()):2}/{MAX_MEMBERS} | {'open' if squad.recruting is True else 'close':5} | {leader}\n"
 
         return squad_list
 
@@ -293,7 +293,7 @@ class Server:
         
         ip = self.network.by_nick[nick].ip
         port = self.network.by_nick[nick].port_config["vsh"]
-        self.network.send((ip, port), (nick, None), ' '.join(args))
+        self.network.direct_send((ip, port), (nick, None), ' '.join(args))
         answer = self.network.vsh(self.network.by_nick[nick])
         message = await self.__send__(answer, squad_terminal, author, color=True)
         
@@ -370,6 +370,10 @@ class Server:
             
             if self.network.squads[args[1]].recruting is False:
                 await self.__send__("Squad is not enrolling new members :(", terminal, author)
+                return
+            
+            if len(self.network.squads[args[1]].members) >= MAX_MEMBERS:
+                await self.__send__(error(7, 7), terminal, author)
                 return
 
             await self.__join_member__(author, args[1])
@@ -513,6 +517,9 @@ class Server:
             await author.edit(nick=args[1])
             await self.__send__("Welcome hacker! Now you play! Enter `>help` here.", squad_terminal, author)
         
+        elif args[0] == "panel":
+            await self.__send__(self.network.squads[squad_terminal.name].panel(), squad_terminal, author)
+
         elif args[0] == "leave":
             self.network.squads[squad_terminal.name].members.pop(author.display_name)
             
@@ -567,11 +574,26 @@ class Server:
 
         elif args[0] == "$archives":
             if self.__check_role__(author, ROLES["Hacker"]) is False:
-                await self.__send__("You are not registered yet... See `help` cmd here.", squad_terminal, author)
+                await self.__send__(error(6, 0), squad_terminal, author)
                 return
 
             await self.__send__(self.network.by_nick[author.display_name].archives(), squad_terminal, author, True)
 
+        elif args[0] == "$vshcfg":
+            if self.__check_role__(author, ROLES["Hacker"]) is False:
+                await self.__send__(error(6, 0), squad_terminal, author)
+                return
+            if len(args) != 2:
+                await self.__send__(error(0, 1), squad_terminal, author)
+                return
+            if args[1].isdigit() is False or int(args[1]) < 10 or int(args[1]) > 99:
+                await self.__send__(error(1, 1), squad_terminal, author)
+                return
+            
+            self.network.by_nick[author.display_name].port_config["vsh"] = int(args[1])
+
+            await self.__send__(f"VSH is now served at {args[1]}.", squad_terminal, author)
+            
         elif args[0] == "$sell":
             if self.__check_role__(author, ROLES["Hacker"]) is False:
                 await self.__send__(error(6, 0), squad_terminal, author)
@@ -750,7 +772,7 @@ class Server:
                         await self.__send__(notification[2], channel, self.guild.get_member_named(notification[1]))
 
                 self.network.notifications = []
-                await asyncio.sleep(60)
+                await asyncio.sleep(30)
 
         @self.bot.event
         async def on_message(message: discord.Message) -> None:

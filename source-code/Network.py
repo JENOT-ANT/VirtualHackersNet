@@ -56,10 +56,10 @@ class Offer:
     seller: str = None
     type: int = None
     price: int = None
-    content: str | Exploit = None
+    content = None #: str | Exploit
 
 
-    def __init__(self, seller: str, type: int, price: int, content: str | Exploit):
+    def __init__(self, seller: str, type: int, price: int, content):#content: str | Exploit
         self.seller = seller
         self.type = type
         self.price = price
@@ -98,12 +98,8 @@ class Network:
 
         self.notifications = []
         
-        self.offers = [
-            Offer(None, OFFER_TYPES["update"], 200, "kernel"),
-            Offer(None, OFFER_TYPES["update"], 100, "vsh"),
-            Offer(None, OFFER_TYPES["update"], 100, "AI"),
-            Offer(None, OFFER_TYPES["update"], 300, "miner"),
-        ]
+        self.offers = []
+
         self.__load__()
 
     def __load__(self):
@@ -151,7 +147,17 @@ class Network:
 
         if "bank" in db.keys():
             self.bank = db["bank"]
-
+        
+        if "offers" in db.keys():
+            self.offers = db["offers"]
+        else:
+            self.offers = [
+                Offer(None, OFFER_TYPES["update"], 200, "kernel"),
+                Offer(None, OFFER_TYPES["update"], 100, "vsh"),
+                Offer(None, OFFER_TYPES["update"], 100, "AI"),
+                Offer(None, OFFER_TYPES["update"], 300, "miner"),
+            ]
+        
         db.close()
 
     def transfer(self, amount: int, destination: str=None, source: str=None) -> bool:
@@ -190,7 +196,7 @@ class Network:
             self.notifications.append((NOTIFICATION_CHANNEL, None, f"The CV hash has been found by {args[1]}."))
             
             if self.transfer(FOUND_CV_AMOUNT + self.by_nick[args[1]].software["miner"], args[1]) is True:
-                self.send((self.by_nick[args[1]].ip, 7676), (SYSTEM_IP, SYSTEM_PORTS["mine"]), "found")
+                self.direct_send((self.by_nick[args[1]].ip, 7676), (SYSTEM_IP, SYSTEM_PORTS["mine"]), "found")
             
             self.__cv_hash__ = str(randint(0, MAX_CV_HASH))
 
@@ -225,7 +231,7 @@ class Network:
         if secret == None:
             secret = str(attacker.exploits[exploit_id].secret)
 
-        self.send((target_ip, target_port), (vm.ip, 2222), f"expl {exploit_id} {attacker_nick} {secret}")
+        self.direct_send((target_ip, target_port), (vm.ip, 2222), f"expl {exploit_id} {attacker_nick} {secret}")
         self.vsh(self.by_ip[target_ip])
 
         answer = self.recv(2222, vm).content
@@ -297,9 +303,9 @@ class Network:
                 target = self.by_ip[vm.forward_to[packet.source[0]][0]]
                 
                 if args[0] == "exploit" and packet.source[0] == vm.nick:
-                    self.send((target.ip, vm.forward_to[packet.source[0]][1]), (vm.ip, 2222), f"{packet.content} {vm.nick} {vm.exploits[int(args[3])].secret}")
+                    self.direct_send((target.ip, vm.forward_to[packet.source[0]][1]), (vm.ip, 2222), f"{packet.content} {vm.nick} {vm.exploits[int(args[3])].secret}")
                 else:
-                    self.send((target.ip, vm.forward_to[packet.source[0]][1]), (vm.ip, 2222), packet.content)
+                    self.direct_send((target.ip, vm.forward_to[packet.source[0]][1]), (vm.ip, 2222), packet.content)
                 
                 self.vsh(target)
                 answer = self.recv(2222, vm)
@@ -307,101 +313,101 @@ class Network:
                 if answer.content.split()[0] == "disconnect":
                     vm.forward_to.pop(packet.source[0])
                     iosout = f"Connection to {target.nick}({target.ip}) has been closed."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
                 elif answer.content.split()[0] == "proxy":
                     iosout = f"{answer.content} < {vm.nick}"
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 
                 elif answer.content == "access denied":
                     vm.forward_to.pop(packet.source[0])
                     iosout = "Access denied! Not authenticated."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                     
                 iosout = answer.content
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
             elif args[0] == "help":
                 iosout = vm.help()
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
             
             elif args[0] == "passwd":
                 self.set_passwd(vm.nick)
                 iosout = "Password has been changed."
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
             elif args[0] == "ls":
                 iosout = vm.ls()
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
             elif args[0] == "cat":
                 if len(args) != 2:
                     iosout =  "Error! Incorrect amount of arguments. Check '> help' command."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
                 iosout = vm.cat(args[1])
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
             elif args[0] == "transfer":
                 if len(args) != 3:
                     iosout =  "Error! Incorrect amount of arguments. Check '> help' command."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 
                 if args[2].isdigit() is False:
                     iosout =  "Error! Incorrect values of the arguments. Check '> help' command."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
                 if not args[1] in self.by_nick.keys():
                     iosout = "Error! Target VM not found."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
                 if int(args[2]) > vm.wallet - (50 * vm.software["kernel"]):
                     iosout = f"Error! Max transefr value: {vm.wallet - (50 * vm.software['kernel'])} [CV]"
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 
                 self.transfer(int(args[2]), args[1], vm.nick)
                 vm.add_to_log(f"Transfered {int(args[2])} CV to {args[1]}.")
                 self.by_nick[args[1]].add_to_log(f"Transaction: {int(args[2])} CV from {vm.nick}")
 
                 iosout = f"Transfered {int(args[2])} [CV] to {args[1]}."
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
             elif args[0] == "whoami":
                 iosout = vm.whoami()
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
             elif args[0] == "rm":
                 if len(args) != 2:
                     iosout =  "Error! Incorrect amount of arguments. Check '> help' command."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 
                 iosout = vm.remove(args[1])
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
             elif args[0] == "ps":
                 iosout = vm.ps()
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
             elif args[0] == "scan":
                 if len(args) != 2:
                     iosout = "Error! Incorrect amount of arguments. Check '> help' command."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 
                 if args[1] == "target" and "target.config" in vm.files.keys():
                     iosout = self.start_scan(vm, vm.files["target.config"])
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
                 iosout = self.start_scan(vm, args[1])
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
             elif args[0] == "panel":
                 iosout = vm.dashboard()
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
             
             elif args[0] == "clear":
                 if len(args) != 2:
                     iosout = error(0, 1)
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
             elif args[0] == "exploit":
                 #print(args)
@@ -409,11 +415,11 @@ class Network:
 
                 if (packet.source[0] != vm.nick and len(args) != 6) or (packet.source[0] == vm.nick and len(args) != 4):
                     iosout = "Error! Incorrect amount of arguments. Check '> help' command."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 
                 if args[2].isnumeric() is False or args[3].isnumeric() is False:
                     iosout = "Error! Incorrect values of the arguments. Check '> help' command."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 
                 if packet.source[0] != vm.nick:
                     iosout = self.exploit(vm, packet.source[0], args[1], int(args[2]), int(args[3]), args[4], args[5])
@@ -421,44 +427,44 @@ class Network:
                 else:
                     iosout = self.exploit(vm, packet.source[0], args[1], int(args[2]), int(args[3]))
 
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
             elif args[0] == "exit":
                 vm.exit(packet.source[0])
                 
                 iosout = "disconnect"
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
             
             elif args[0] == "proxy":
                 iosout = f"proxy {vm.nick}"
                 
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
             elif args[0] == "close":
                 iosout = vm.close()
 
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
             elif args[0] == "vsh":
                 if len(args) != 4:
                     iosout = "Error! Incorrect amount of arguments. Check '> help' command."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
                 if not args[1] in self.by_ip.keys():
                     iosout = "Error! IP address not found or not responding!"
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
                 target = self.by_ip[args[1]]
         
                 if args[2] != str(target.port_config["vsh"]):
                     if args[2] in target.port_config.values():
                         iosout = "Error! Address responded with different protocol."
-                        return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                        return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
                     iosout = "Error! Connection refused."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 
-                self.send((target.ip, target.port_config["vsh"]), (vm.ip, 2222), f"connect {args[3]}")
+                self.direct_send((target.ip, target.port_config["vsh"]), (vm.ip, 2222), f"connect {args[3]}")
                 self.vsh(target)
                 
                 answer = self.recv(2222, vm)
@@ -466,25 +472,25 @@ class Network:
 
                 if answer.content != "accept":
                     iosout = f"Access denied! Incorrect credentials."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
                 vm.forward_to[packet.source[0]] = (target.ip, target.port_config["vsh"])
 
                 iosout = f"Connected to {target.nick}({target.ip})"
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 
             elif len(args) >= 3 and args[1] == '<':
                 if args[0].endswith(".sys") is True:
                     iosout = f"Access denied."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 
                 if len(args[0]) > FILENAME_LIMIT:
                     iosout = f"Incorrect filename."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 
                 if len(vm.files) >= 20 and not args[0] in vm.files.keys():
                     iosout = f"Max files amount reached."
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 
                 if args[0] in vm.files.keys():
                     iosout = "File updated."
@@ -493,28 +499,28 @@ class Network:
                 
                 vm.files[args[0]] = ' '.join(args[2:])
 
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
             else:
                 iosout = "Error! Command not found."
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
         
         else: # if not logged in:
             if args[0] == "connect":
                 if len(args) != 2:
                     iosout = "args"
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 if md5(args[1].encode('ascii')).hexdigest() != vm.files["shadow.sys"]:
                     vm.add_to_log(f"Connection failed from {packet.source[0]}.")
                     
                     iosout = "credentials"
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
                 vm.add_to_log(f"{packet.source[0]} has just connected.")
                 
                 iosout = "accept"
                 vm.logged_in.append(packet.source[0])
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
             
             elif args[0] == "expl":
                 
@@ -523,7 +529,7 @@ class Network:
 
                 if len(args) != 4 or args[1].isdigit() is False:
                     iosout = "args"
-                    return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                    return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
                 iosout = self.handle_exploit(vm, int(args[1]), args[2], args[3])
                 
@@ -533,20 +539,20 @@ class Network:
                     iosout = f"accept"
                     vm.logged_in.append(packet.source[0])
                 
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
                 
             elif args[0] == "ping":
                 iosout = "VSH"
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
             else:
                 iosout = "access denied"
-                return self.send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
+                return self.direct_send(packet.source, (vm.ip, vm.port_config["vsh"]), iosout)
 
     def vm_miner(self, vm: VM):
         answer: Packet = None
         
-        self.send((SYSTEM_IP, SYSTEM_PORTS["mine"]), (vm.ip, 7676), f"{random.randint(0, MAX_CV_HASH)} {vm.files['miner.config']}")
+        self.direct_send((SYSTEM_IP, SYSTEM_PORTS["mine"]), (vm.ip, 7676), f"{random.randint(0, MAX_CV_HASH)} {vm.files['miner.config']}")
 
         if 7676 in vm.network.keys():
             answer = self.recv(7676, vm)
@@ -650,13 +656,13 @@ class Network:
             process.memory["recv"] = 1
             
             for port in range(1, 100):
-                self.send((process.memory["ip"], port), (vm.ip, int(f"{port}{port}")), "ping")
+                self.direct_send((process.memory["ip"], port), (vm.ip, int(f"{port}{port}")), "ping")
 
         else:
             vm.files["scan.txt"] = f"Target: {process.memory['ip']}\nOS: {OS_LIST[self.by_ip[process.memory['ip']].os]}\n{25 * '_'}\n\n\tPORT  ANSWER\n"
             
-            if "target.config" in vm.files.keys() and vm.files["target.config"].count('\n') == 0:
-                vm.add("target.config", OS_LIST[self.by_ip[process.memory['ip']].os])
+            # if "target.config" in vm.files.keys() and vm.files["target.config"].count('\n') == 0:
+            #     vm.add("target.config", OS_LIST[self.by_ip[process.memory['ip']].os])
 
             for port in range(1, 100):
                 answer = self.recv(int(f"{port}{port}"), vm)
@@ -664,7 +670,7 @@ class Network:
                 if answer == None:
                     continue
                 
-                vm.files["scan.txt"] += f"\t{port:<2}:    {answer.content}\n"
+                vm.files["scan.txt"] += f"\t{port:<2}:    {answer.content}\n{25 * '_'}"
             
             process.name = "temp"
             process.code = ["exit", ]
@@ -713,7 +719,7 @@ class Network:
         return "".join(choices(PASSWDS_ALPHABET, k=PASSWD_LENGHT))
 
 
-    def send(self, destination: tuple, source: tuple, content: str) -> str:
+    def direct_send(self, destination: tuple, source: tuple, content: str) -> str:
         new_line_char: str = '\n'
         replacement: str = "\n\t"
 
@@ -810,13 +816,16 @@ class Network:
                     elif cmd[0] == "exit":
                         vm.cpu.pop(pid)
                         continue
-                    
+
                     else:
                         vm.execute(pid)
                     
                     vm.cpu[pid].forward()
                     pid += 1    
-            
+
+                for packet in vm.netout:
+                    self.direct_send(packet.source, (vm.ip, int(f"{packet.source[1]}{packet.source[1]}")))
+
             sleep(FREQUENCY)
 
     def add_vm(self, old_name: str, nick: str, os: int, squad: str):
@@ -849,4 +858,5 @@ class Network:
         db["vms"] = vms
         db["squads"] = squads
         db["bank"] = self.bank
+        db["offers"] = self.offers
         db.close()

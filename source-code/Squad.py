@@ -1,6 +1,8 @@
 from VM import VM
 
 
+MAX_MEMBERS: int = 12
+
 RANKS: dict = {
     "recruit": 0,
     "master": 1,
@@ -20,6 +22,25 @@ class Squad:
         self.name = name
         self.members = members
         self.recruting = recruting
+
+    def panel(self) -> str:
+        output: str = None
+
+        output = f"""
+ ______________________________
+|{               self.name:^30}|
+|==============================|
+|{f' members: {len(self.members)}/{MAX_MEMBERS}':<30}|
+|{f' recruitment: {self.recruting}':<30}|
+|==============================|"""
+
+        for member in self.members.keys():
+            output += f"\n|{member:^14}|{INT_TO_RANK[self.members[member]]:^15}|"
+
+        output += "\n|______________________________|"
+
+        return output
+
 
     def export(self) -> dict:
         return {
