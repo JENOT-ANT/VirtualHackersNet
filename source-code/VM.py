@@ -178,9 +178,12 @@ class VM:
 
 
     def add(self, file_name: str, content: str, overwrite: bool=False) -> str:
-        lines_amount: int = self.files[file_name].count('\n') + 2
+        lines_amount: int = None
 
         if file_name in self.files.keys():
+            
+            lines_amount = self.files[file_name].count('\n') + 2
+            
             if lines_amount <= MAX_FILE_SIZE:
                 self.files[file_name] += f"\n{content}"
             else:
@@ -265,11 +268,11 @@ class VM:
         ai_state: str = "off"
         
         if lines_amount >= 1:
-            line1 = lines[lines_amount - 1][20:56]
+            line1 = lines[lines_amount - 3][20:56]
         if lines_amount >= 2:
             line2 = lines[lines_amount - 2][20:56]
         if lines_amount >= 3:
-            line3 = lines[lines_amount - 3][20:56]
+            line3 = lines[lines_amount - 1][20:56]
         
         for process in self.cpu:
             if process.name == "bf":

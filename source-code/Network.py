@@ -629,9 +629,9 @@ class Network:
 
         #print(guess)
         if md5(guess.encode("ascii")).hexdigest() == process.memory["hash"]:
-            vm.add("pass.txt", f"{process.memory['hash']} => {guess}")
+            vm.add("pass.txt", f"{process.memory['hash']} => {guess}", True)
             vm.add_to_log("Bruteforce completed.")
-            self.notifications.append((vm.squad, vm.nick, "Bruteforce completed. Check > cat pass.txt to see the resoult."))
+            self.notifications.append((vm.squad, vm.nick, f"Bruteforce completed.\nPassword: {guess}\nAlso you can check > cat pass.txt to see the resoult."))
 
             process.name = "temp"
             process.code = ["exit", ]

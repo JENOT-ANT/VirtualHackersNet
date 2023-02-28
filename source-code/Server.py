@@ -3,6 +3,7 @@
 
 
 import discord
+import discord.ui
 #from discord.ext import commands
 from Network import Network, Offer
 import asyncio
@@ -110,6 +111,8 @@ SQUAD_HELP: str = f"""
     - time ----------------> display server time
     
     - leave ---------------> leave the squad
+
+    - >help --------------> display help for the VM commands
 
   ## (Co)Leader commands:
     
@@ -412,9 +415,12 @@ class Server:
 
         await store.create_thread(name=f"[ {len(self.network.offers) - 1} ] --{EXPLOITS[offer.content.category].upper()} {OS_LIST[offer.content.os]} {offer.content.lvl}--", content=f"**By:** {author.mention}\n**Price:** {price} CV\n**Success rate:** {offer.content.success_rate} %", applied_tags=[store.get_tag(TAGS["exploits"]), ])
 
-    async def __squad__(self, squad_terminal: discord.TextChannel, author: discord.Member, args: list[str]=None, reaction: discord.Reaction=None):
-        
+    async def __squad__(self, squad_terminal: discord.TextChannel, author: discord.Member, args: list[str]=None, reaction: discord.Reaction=None, message: discord.Message=None):
+        edit: bool = False
+
         if args == None:
+            edit = True
+
             if reaction.emoji == '📟':
                 args = ['>', "panel",]
             elif reaction.emoji == '📁':
@@ -440,11 +446,19 @@ class Server:
             elif reaction.emoji == '🗜':
                 args = ['>', "kernel_exploit", ]
             else:
+                edit = False
                 args = ["nothing",]
+
+        if len(args[0]) > 1 and args[0][0] == '>':
+            args.insert(0, '>')
+            args[1] = args[1][1:]
 
         print(args)
 
         if args[0] == "help":
+            # if edit is True:
+                # message.edit(content=f"```\n{SQUAD_HELP}\n```")
+
             await self.__send__(SQUAD_HELP, squad_terminal, author)
         
         elif args[0][0] == '!':
@@ -515,10 +529,10 @@ class Server:
 
             await author.add_roles(self.guild.get_role(ROLES["Hacker"]))
             await author.edit(nick=args[1])
-            await self.__send__("Welcome hacker! Now you play! Enter `>help` here.", squad_terminal, author)
-        
+            await self.__send__("Welcome hacker! Now you play! Enter `> help` here.", squad_terminal, author)
+
         elif args[0] == "panel":
-            await self.__send__(self.network.squads[squad_terminal.name].panel(), squad_terminal, author)
+            await self.__send__(self.network.squads[squad_terminal.name].panel(), squad_terminal, author, True)
 
         elif args[0] == "leave":
             self.network.squads[squad_terminal.name].members.pop(author.display_name)
@@ -541,7 +555,7 @@ class Server:
         elif args[0] == "$time" or args[0] == "time":
             await self.__send__(f"It's <{asctime(gmtime())}> in the game.", squad_terminal, author, True)
 
-        elif args[0] == "$whois":
+        elif args[0] == "$whois" or args[0] == "whois":
             if len(args) != 2:
                 await self.__send__("Incorrect amount of arguments. Take a look at '> help' command.", squad_terminal, author)
                 return
@@ -747,10 +761,16 @@ class Server:
             self.guild = self.bot.get_guild(SERVER_ID)
             
             print(f"-- session by {self.bot.user} in {self.guild.name} --")
-            #await self.__send__("Starting up...", self.guild.get_channel(CHANNELS["terminal"]), self.guild.get_role(ROLES["everyone"]))
+            # await self.__send__("Starting up...", self.guild.get_channel(CHANNELS["terminal"]), self.guild.get_role(ROLES["everyone"]))
             await self.guild.get_channel(CHANNELS["terminal"]).send("```\nStarting up...\n```")
             
-            report_message = await self.guild.get_channel(CHANNELS["quick-report"]).send("React with :warning: emoij to quickly notify **MODS** about some **rules-braking** incident.")
+            # class Button(discord.ui.View):
+            #     @discord.ui.button(label="test", style=discord.ButtonStyle.green)
+            #     async def test(self, button: discord.ui.Button, interaction: discord.Interaction):
+            #         print("Test!")
+            #         interaction.response.edit_message()
+
+            report_message = await self.guild.get_channel(CHANNELS["quick-report"]).send("React with :warning: emoij to quickly notify **MODS** about some **rules-braking** incident.")#, view=Button())
             await report_message.add_reaction("⚠")
 
             #print([f"{tag.name}: {tag.id}" for tag in self.guild.get_channel(CHANNELS["exchange"]).available_tags])
@@ -790,7 +810,7 @@ class Server:
 
             channel = self.guild.get_channel(message.channel.id)#self.bot.get_channel(message.channel.id)
             args = message.content.split()
-            
+            args[0] = args[0].lower()
 
             if self.__check_role__(author, ROLES["Mod"]) or self.__check_role__(author, ROLES["Admin"]):
                 if args[0] == "!void":
@@ -859,7 +879,7 @@ class Server:
                 return
 
             if message.channel.category_id == CATEGORIES["SQUADS"] :
-                await self.__squad__(channel, author, reaction=reaction)
+                await self.__squad__(channel, author, reaction=reaction, message=message)
                 await reaction.remove(author)
             
             elif message.channel.id == CHANNELS["quick-report"]:
