@@ -10,7 +10,7 @@
 ## 📜 Description:
   - A **text/commands game** based on a **Discord server**, that simulates a **virtual network**. 
   - **The final idea behind it is simple: join (or gather) squad, protect your game's virtual machine, hack others, trade and gather virtual currency.**
-  - **You can join game here** -> **https://discord.gg/B9bqFxp2** (I'm trying to keep this invitation link active, but if you found it outdated, just let me know in the `Discussions` tab) and become one of the first member of the community!
+  - **You can join game here** -> **https://discord.gg/wM8UdYXtjk** (I'm trying to keep this invitation link active, but if you found it outdated, just let me know in the `Discussions` tab) and become one of the first member of the community!
     > right now the game is in a developement process and the some part of planned features dosen't work.
 _______________________________________________
 ## 🛠 Wanna contribute, maintain game as a mod?
